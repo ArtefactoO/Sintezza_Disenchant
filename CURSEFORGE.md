@@ -24,8 +24,10 @@ On a character with Enchanting and Disenchant learned, open `/sde` or use the En
 
 Install and enable [Sintezza Theme](https://github.com/ArtefactoO/Sintezza_Theme). Install [Mastercraft](https://www.curseforge.com/wow/addons/mastercraft) and enable its loot advice to use Mastercraft recommendations and available prices in **Mark best picks**. [Auctionator](https://www.curseforge.com/wow/addons/auctionator) or [TradeSkillMaster](https://www.curseforge.com/wow/addons/tradeskill-master) can provide fallback market prices. [Baganator](https://www.curseforge.com/wow/addons/baganator) adds an optional queue shortcut.
 
-### Changelog
+## Changelog
 
 [View the release history on GitHub](https://github.com/ArtefactoO/Sintezza_Disenchant/blob/main/CHANGELOG.md).
 
-Source, installation details, and credits are available on [GitHub](https://github.com/ArtefactoO/Sintezza_Disenchant).
+## Source
+
+https://github.com/ArtefactoO/Sintezza_Disenchant
