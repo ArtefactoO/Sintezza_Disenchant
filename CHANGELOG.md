@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.38
+
+- Updated the project logo and in-game addon icon.
+
+### По-русски
+
+- Обновлены логотип проекта и игровая иконка аддона.
+
 ## 1.0.37
 
 - Localized the fallback name for Luminous Residue, the generic mail error, and the add-on category.
