@@ -4,7 +4,7 @@
 
 Queue gear for disenchanting, inspect possible materials and their value, and track what you recover in WoW Forever. Each press of the disenchant button processes one item.
 
-**Requires [Sintezza Theme](https://github.com/ArtefactoO/Sintezza_Theme).** The queue and statistics work without a price source. Install [Mastercraft](https://www.curseforge.com/wow/addons/mastercraft) and enable its loot advice to use its recommendations and available prices in **Mark best picks**. Auctionator or TradeSkillMaster (TSM) can supply fallback market prices. Baganator can provide a shortcut to the queue. Choose English or Russian in the theme settings.
+**Requires [Sintezza Theme](https://github.com/ArtefactoO/Sintezza_Theme).** The queue and statistics work without a price source. Install [Mastercraft](https://www.curseforge.com/wow/addons/mastercraft) and enable its loot advice to use its recommendations and available prices in **Mark best picks**. [Auctionator](https://www.curseforge.com/wow/addons/auctionator) or [TradeSkillMaster](https://www.curseforge.com/wow/addons/tradeskill-master) (TSM) can supply fallback market prices. [Baganator](https://www.curseforge.com/wow/addons/baganator) can provide a shortcut to the queue. Choose English or Russian in the theme settings.
 
 ## Queue and mailing
 
