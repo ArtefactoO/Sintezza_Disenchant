@@ -1,0 +1,8 @@
+<Bindings>
+    <!-- One key press = one click on the queue button = one cast.
+         The button (global name Sintezza_Disenchant_QueueButton) is created in
+         Sintezza_Disenchant.lua; the display texts BINDING_HEADER_* and
+         BINDING_NAME_* are defined there as well. -->
+    <Binding name="CLICK Sintezza_Disenchant_QueueButton:LeftButton" category="SINTEZZA_DISENCHANT">
+    </Binding>
+</Bindings>

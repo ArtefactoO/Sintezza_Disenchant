@@ -1,0 +1,32 @@
+## Interface: 16001
+## Title: Sintezza Disenchant
+## Notes: Disenchant queue, material estimates, and gear mailing.
+## Notes-ruRU: Очередь распыления, оценка материалов и отправка вещей.
+## Author: Sintezza
+## X-License: MIT
+## Version: 1.0.37
+## IconTexture: Interface\AddOns\Sintezza_Theme\Media\Icons\Sintezza_Disenchant
+## Category: Professions
+## Category-ruRU: Профессии
+## SavedVariables: Sintezza_DisenchantDB
+## Dependencies: Sintezza_Theme
+## OptionalDeps: Baganator, Mastercraft
+
+
+Launcher.lua
+Locales.lua
+Theme.lua
+Style.lua
+PriceProviders.lua
+SavedData.lua
+Learning.lua
+EraReference.lua
+Prediction.lua
+ValueAPI.lua
+Stats.lua
+ExternalTooltips.lua
+Mastercraft.lua
+Mail.lua
+MailUI.lua
+ProfessionTab.lua
+Sintezza_Disenchant.lua
