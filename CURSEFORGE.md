@@ -20,9 +20,13 @@ On a character with Enchanting and Disenchant learned, open `/sde` or use the En
 
 **Mark best picks** compares the estimated disenchant value with vendor and net auction proceeds. The gear-mailing window lets you send items to another character for disenchanting. Session and all-time stats show recovered materials and support CSV import and export.
 
+### Appearance
+
+**Requires [Sintezza Theme](https://github.com/ArtefactoO/Sintezza_Theme).** Open `/stheme` to choose the palette and fonts for this addon's windows.
+
 ### Requirements
 
-Install and enable [Sintezza Theme](https://github.com/ArtefactoO/Sintezza_Theme). Open `/stheme` to change the palette and fonts used by this addon's windows. Install [Mastercraft](https://www.curseforge.com/wow/addons/mastercraft) and enable its loot advice to use Mastercraft recommendations and available prices in **Mark best picks**. [Auctionator](https://www.curseforge.com/wow/addons/auctionator) or [TradeSkillMaster](https://www.curseforge.com/wow/addons/tradeskill-master) can provide fallback market prices. [Baganator](https://www.curseforge.com/wow/addons/baganator) adds an optional queue shortcut.
+Install [Mastercraft](https://www.curseforge.com/wow/addons/mastercraft) and enable its loot advice to use Mastercraft recommendations and available prices in **Mark best picks**. [Auctionator](https://www.curseforge.com/wow/addons/auctionator) or [TradeSkillMaster](https://www.curseforge.com/wow/addons/tradeskill-master) can provide fallback market prices. [Baganator](https://www.curseforge.com/wow/addons/baganator) adds an optional queue shortcut.
 
 <!-- Changelog field -->
 
