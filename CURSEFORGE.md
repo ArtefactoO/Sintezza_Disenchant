@@ -22,7 +22,7 @@ On a character with Enchanting and Disenchant learned, open `/sde` or use the En
 
 ### Requirements
 
-Install and enable [Sintezza Theme](https://github.com/ArtefactoO/Sintezza_Theme). Install [Mastercraft](https://www.curseforge.com/wow/addons/mastercraft) and enable its loot advice to use Mastercraft recommendations and available prices in **Mark best picks**. [Auctionator](https://www.curseforge.com/wow/addons/auctionator) or [TradeSkillMaster](https://www.curseforge.com/wow/addons/tradeskill-master) can provide fallback market prices. [Baganator](https://www.curseforge.com/wow/addons/baganator) adds an optional queue shortcut.
+Install and enable [Sintezza Theme](https://github.com/ArtefactoO/Sintezza_Theme). Open `/stheme` to change the palette and fonts used by this addon's windows. Install [Mastercraft](https://www.curseforge.com/wow/addons/mastercraft) and enable its loot advice to use Mastercraft recommendations and available prices in **Mark best picks**. [Auctionator](https://www.curseforge.com/wow/addons/auctionator) or [TradeSkillMaster](https://www.curseforge.com/wow/addons/tradeskill-master) can provide fallback market prices. [Baganator](https://www.curseforge.com/wow/addons/baganator) adds an optional queue shortcut.
 
 <!-- Changelog field -->
 
