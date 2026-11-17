@@ -59,6 +59,9 @@ UpdateBindingName()
 
 local db
 local windowAppearance = Sintezza_Theme:NewWindowPreferences(function() return db end)
+if Sintezza_Theme.RegisterGlobalWindowPreferences then
+    Sintezza_Theme:RegisterGlobalWindowPreferences("Sintezza Disenchant", windowAppearance)
+end
 local items = {}
 local selected = {}
 local disenchantBlocked = {}
@@ -2200,7 +2203,7 @@ end
 -- custom backdrop, custom title bar (doubling as drag handle) and a close
 -- button. The returned frame exposes .title (FontString), .TitleBar and
 -- .CloseButton so other code can anchor to them.
-local function CreateStyledWindow(globalName, width, height, extraTemplate)
+local function CreateStyledWindow(globalName, width, height, extraTemplate, addonName)
     -- extraTemplate lets a caller mix in an additional frame template (e.g. the
     -- main window adds SecureHandlerStateTemplate so a state driver can hide it
     -- in combat). The default look/behaviour is unchanged for every other window.
@@ -2222,6 +2225,7 @@ local function CreateStyledWindow(globalName, width, height, extraTemplate)
     end)
 
     local titleBar = Sintezza_Theme:CreateWidgets(ns.SettingsTheme):WindowHeader(f, {
+        addonName = addonName,
         icon = Sintezza_Theme.icons.Sintezza_Disenchant,
         onClose = function()
             if InCombatLockdown() and f:IsProtected() then
@@ -2489,7 +2493,7 @@ local function ToggleStatsFrame()
 end
 
 local function CreateMainFrame()
-    mainFrame = CreateStyledWindow("Sintezza_Disenchant_MainFrame", 860, 580, "SecureHandlerStateTemplate")
+    mainFrame = CreateStyledWindow("Sintezza_Disenchant_MainFrame", 860, 580, "SecureHandlerStateTemplate", "Sintezza_Disenchant")
     mainFrame:SetPoint("CENTER")
     mainFrame:Hide()
     mainFrame.RefreshUI = RefreshUI
@@ -2853,24 +2857,16 @@ end
 
 local function CreateMinimapButton()
     minimapButton = Sintezza_Theme:CreateMinimapButton(ADDON_NAME, Sintezza_Theme.icons.Sintezza_Disenchant, db.minimap,
-        function(_, button)
-            local integrated = db.minimapDestination == "profession" and ns.ProfessionTab and ns.ProfessionTab.Open
-            if integrated and not InCombatLockdown() then
-                if button == "LeftButton" and ns.ProfessionTab.Toggle() then return end
-                if button == "RightButton" and ns.ProfessionTab.Open() then ToggleSettingsFrame(); return end
-            end
-            if button == "LeftButton" then
-                if db.minimapDestination == "stats" then ToggleStatsFrame() else ToggleMainFrame() end
-            elseif button == "RightButton" then
-                ToggleSettingsFrame()
-            end
+        function()
+            local tab = db.minimapDestination == "profession" and ns.ProfessionTab
+            if tab and tab.Toggle and tab.Toggle() then return end
+            if db.minimapDestination == "stats" then ToggleStatsFrame() else ToggleMainFrame() end
         end,
         function(tooltip)
             tooltip:AddLine("Sintezza Disenchant")
             local integrated = db.minimapDestination == "profession" and ns.ProfessionTab and ns.ProfessionTab.Open
             local left = integrated and "MM_LEFT_PROFESSION" or (db.minimapDestination == "stats" and "MM_LEFT_STATS" or "MM_LEFT")
             tooltip:AddLine(L[left], 1, 1, 1)
-            tooltip:AddLine(L["MM_RIGHT"], 1, 1, 1)
             tooltip:AddLine(L["MM_DRAG"], 1, 1, 1)
         end)
 end
@@ -3151,7 +3147,7 @@ local function StartHotkeyCapture()
 end
 
 local function CreateSettingsFrame()
-    settingsFrame = CreateStyledWindow("Sintezza_Disenchant_SettingsFrame", 590, 544)
+    settingsFrame = CreateStyledWindow("Sintezza_Disenchant_SettingsFrame", 590, 544, nil, ADDON_NAME)
     settingsFrame:SetPoint("CENTER", UIParent, "CENTER", -300, 0)
     settingsFrame:Hide()
     settingsFrame.title:SetText(L["SETTINGS_TITLE"])
@@ -3529,7 +3525,7 @@ local function RunSelfCheck(forceWindow)
     elseif GetAddOnMetadata then
         meta = GetAddOnMetadata(ADDON_NAME, "Version")
     end
-    local header = L["CHECK_HEADER"]:format(meta or "1.0.35")
+    local header = L["CHECK_HEADER"]:format(meta or "1.1.0")
     lines[#lines + 1] = header
     Print(header)
 

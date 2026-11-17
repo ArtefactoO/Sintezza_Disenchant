@@ -1,10 +1,22 @@
 # Changelog
 
-## 1.0.38
+## 1.1.0
+
+- The settings header shows the addon version.
+- The disenchant queue window shows the version beside the title.
+- Left-clicking the minimap icon opens or closes the window.
+
+- Connected window scale, opacity, and layer to the shared Theme settings. The WoW AddOns settings launcher uses the shared Theme helper.
 
 - Updated the project logo and in-game addon icon.
 
 ### По-русски
+
+- В шапке настроек отображается версия аддона.
+- В окне очереди распыления версия отображается рядом с названием.
+- ЛКМ по значку у миникарты открывает или закрывает окно.
+
+- Масштаб, непрозрачность и слой окон подключены к общим настройкам Theme. Страница в меню модификаций использует общую реализацию Theme.
 
 - Обновлены логотип проекта и игровая иконка аддона.
 
