@@ -1,6 +1,6 @@
 # Sintezza Disenchant
 
-![Sintezza Disenchant project logo](Docs/Logo.png)
+![Sintezza Disenchant project logo](Docs/CurseForge/Logo.png)
 
 Queue gear for disenchanting, inspect possible materials and their value, and track what you recover in WoW Forever. Each press of the disenchant button processes one item.
 
@@ -9,9 +9,12 @@ Queue gear for disenchanting, inspect possible materials and their value, and tr
 ## Queue and mailing
 
 - Open the queue from the Enchanting profession window, the minimap, Baganator, or `/sde`. Select gear and process the queue one item at a time.
-- Protect gear sets, set item-level and price cutoffs, or skip items without a price when adding gear in bulk. You can still select protected gear manually. The separate exclusions list keeps items out of the scan results until restored.
+- Switch to **Compact** for a small bar showing the current item, its material preview, and the next item. Use **Full** to return to the complete list.
+- The item list and queue fit their visible rows to the window size. Use the mouse wheel or scrollbar to reach the remaining items; selections stay active when their rows are offscreen.
+- Protect gear sets, set item-level and price cutoffs, or skip items without a price when adding gear in bulk. You can still select protected gear manually. Use the button beside an item to exclude or restore all copies; excluded items remain visible but cannot enter the queue until restored.
 - **Mark best picks** replaces the queue selection with items that return strictly more from disenchanting than from either available sale option. It applies bulk-selection protections and compares net auction proceeds. Mastercraft advice and prices are used first when available. The footer shows when local estimates are needed. Manual selection is available for items with incomplete prices.
 - Open the gear-mailing screen from the disenchant icon in the inbox or with `/sde mail` to send gear to an enchanter.
+- Set a disenchanting hotkey in **Settings > Window and minimap**. Each press processes one queued item while the window or compact bar is open.
 
 ## Results and estimates
 
@@ -28,26 +31,34 @@ Export session or all-time statistics as CSV. After validation and confirmation,
 | `/sde check` | Diagnostics |
 | `/sde copy` | Copyable diagnostics report |
 
-## Русский
-
-Sintezza Disenchant собирает из сумок снаряжение для распыления в WoW Forever. Аддон показывает возможные материалы, вероятности и оценку при наличии цен. Одно нажатие распыляет один предмет. **Требуется Sintezza Theme**, в ее настройках выбирается язык.
-
-- Очередь доступна из окна наложения чар, с миникарты и через Baganator при его наличии. Защита массового выбора учитывает комплекты, пороги уровня и цены и правило для предметов без оценки. Защищенные вещи можно отметить вручную, а исключения управляются отдельно.
-- «Отметить выгодные» заменяет выбор вещами, которые выгоднее распылить, чем продать торговцу или выставить на аукцион. Аддон учитывает защиту массового выбора и комиссию. При наличии советов и цен Mastercraft они учитываются первыми. При использовании местных оценок появляется пометка «Резервная оценка». Вещи с неполными ценами можно выбрать вручную.
-- Значок распыления во входящей почте открывает окно отправки снаряжения персонажу с наложением чар.
-- Статистика считает успешные распыления через очередь и записывает материалы, когда клиент сообщает результат. Ручные применения учитываются отдельно. Цены для оценки берутся из Auctionator или TSM, а Sintezza Vendor может использовать готовую оценку распыления.
-- На вкладке «Статистика» можно экспортировать итоги сеанса или общие итоги в CSV. Импорт проверяет файл и после подтверждения заменяет итоги указанного в нем периода. «Управление данными» позволяет отдельно очистить итоги сеанса, общую статистику и обученные результаты.
-
-Команды и способы открытия перечислены выше.
-
 ## Gallery
 
-![The disenchant queue with possible materials and their chances.](Docs/01-queue.png)
+![Selected gear with material chances and quantities, and the queue order.](Docs/CurseForge/01-disenchant-queue.png)
 
-![All-time results and estimated material value.](Docs/02-statistics.png)
+**Disenchanting queue.** Preview materials and chances, select gear, and process items in order.
 
-## License and code credits
+![Compact queue with the current item's materials and the next item.](Docs/CurseForge/02-compact-queue.png)
 
-Sintezza Disenchant is available under the [MIT License](LICENSE). Its bag scanning and disenchant queue adapt code from Disenchant Helper by Rokzan, formerly Rakuga. Sintezza adds material statistics, profitable picks, and disenchant estimates for Vendor. [Disenchant Helper](https://www.curseforge.com/wow/addons/disenchant-helper)
+**Compact queue.** Keep the current item's materials, the next item, and the remaining count in a small bar.
+
+![Standalone settings for quality, equipment sets, item level, and value.](Docs/CurseForge/03-queue-protection.png)
+
+**Queue protection.** Configure bulk-selection rules in a standalone settings window.
+
+![Excluded gear and the per-item restore buttons.](Docs/CurseForge/04-excluded-items.png)
+
+**Excluded gear.** Items stay visible and dimmed until restored with the per-item button.
+
+![Standalone exclusions list with per-item removal and Clear all.](Docs/CurseForge/05-item-exclusions.png)
+
+**Item exclusions.** Review exclusions in their own window and remove individual entries or clear the list.
+
+![Standalone window, minimap, and disenchanting hotkey settings.](Docs/CurseForge/06-window-settings.png)
+
+**Window and hotkey.** Show the standalone Window and minimap tab, including the disenchanting key.
+
+## Credits and license
+
+Inspired by [Disenchant Helper](https://www.curseforge.com/wow/addons/disenchant-helper) by Rokzan (formerly Rakuga). [MIT License and code credits](LICENSE).
 
 [CurseForge listing fields](CURSEFORGE.md)

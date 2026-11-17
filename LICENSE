@@ -20,3 +20,10 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+Third-party code credits
+
+Disenchant Helper by Rokzan (formerly Rakuga), distributed under the MIT License.
+Adapted portions remain in bag scanning and queue processing, profession-window
+integration, mailing, material prediction, learned results, and statistics.
+Source: https://www.curseforge.com/wow/addons/disenchant-helper

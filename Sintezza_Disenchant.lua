@@ -66,7 +66,6 @@ local items = {}
 local selected = {}
 local disenchantBlocked = {}
 local bulkMessage
-local hasExcludedBagItems = false
 local queue = {}
 local needsRefreshAfterCombat = false
 -- How many items the automatic compact queue skipped SOLELY because of the
@@ -82,17 +81,14 @@ local mainContent
 ns.ProfessionViews = {}
 local listPanel
 local listScrollFrame
-local listScrollChild
 local queuePanel
 local queueScrollFrame
-local queueScrollChild
 local statusText
 local modeTabFrame
 local modeTabButtons = {}
 local queueInfoText
 local queueButton
 local queueButtonText
-local manualBlacklistButton
 local blacklistOpenButton
 local listRows = {}
 local queueRows = {}
@@ -706,20 +702,25 @@ local function IsValuableItem(item)
     return threshold ~= nil and item.priceCopper ~= nil and item.priceCopper >= threshold * 10000
 end
 
+-- The second result identifies an item protected solely by its market value.
 local function IsAutoQueueProtected(item)
-    if item.disenchantBlocked then return true end
+    if item.disenchantBlocked or item.excluded then return true end
     if not (activeMode and activeMode.usesItemProtection) then
         return false
     end
-    return item.manualOnly or IsSetProtected(item) or IsIlvlProtected(item) or IsValuableItem(item)
-        or (db.skipUnknownPrice and item.priceCopper == nil and PriceProtectionThreshold() ~= nil)
+    local protected = item.manualOnly or IsSetProtected(item) or IsIlvlProtected(item)
+    if protected then return protected end
+
+    local valuable = IsValuableItem(item)
+    return valuable or (db.skipUnknownPrice and item.priceCopper == nil and PriceProtectionThreshold() ~= nil),
+        valuable
 end
 
 local function BuildQueue()
     wipe(queue)
     valuableSkippedCount = 0
     for _, item in ipairs(items) do
-        if selected[item.key] and not item.disenchantBlocked then
+        if selected[item.key] and not item.disenchantBlocked and not item.excluded then
             queue[#queue + 1] = item
         end
     end
@@ -729,16 +730,11 @@ local function BuildQueue()
     -- enter the queue via a manual checkbox in the main window.
     if #queue == 0 and db and db.compactMode and compactFrame and compactFrame:IsShown() then
         for _, item in ipairs(items) do
-            if IsAutoQueueProtected(item) then
-                -- Count only those excluded PURELY by their value - a set or
-                -- ilvl-capped item would have been skipped anyway, so it does
-                -- not count as "skipped because it's valuable".
-                if not item.disenchantBlocked and not item.manualOnly and IsValuableItem(item)
-                    and not IsSetProtected(item) and not IsIlvlProtected(item) then
-                    valuableSkippedCount = valuableSkippedCount + 1
-                end
-            else
+            local protected, valuableOnly = IsAutoQueueProtected(item)
+            if not protected then
                 queue[#queue + 1] = item
+            elseif valuableOnly then
+                valuableSkippedCount = valuableSkippedCount + 1
             end
         end
     end
@@ -812,7 +808,6 @@ end
 
 local function ScanBags()
     wipe(items)
-    hasExcludedBagItems = false
     local validKeys = {}
     local waiting = 0
 
@@ -857,8 +852,6 @@ local function ScanBags()
                         retry.attempts = retry.attempts + 1
                         QueueRefreshWhenItemLoaded(bag, slot)
                     end
-                elseif eligible and IsBlacklistedItem(link) then
-                    hasExcludedBagItems = true
                 elseif eligible then
                     local itemLevel = 0
                     if C_Item and C_Item.GetDetailedItemLevelInfo then
@@ -895,6 +888,7 @@ local function ScanBags()
                         manualOnly = activeMode.key == "disenchant" and IsForeverDisenchantMaterial(link),
                     }
                     entry.disenchantBlocked = activeMode.key == "disenchant" and ns.IsDisenchantBlocked(entry)
+                    entry.excluded = IsBlacklistedItem(link)
 
                     -- Value data for the surface (nil when the guard is off /
                     -- no price known). isValuable is derived once here so the
@@ -910,7 +904,7 @@ local function ScanBags()
                     entry.bindTag = tagText
 
                     items[#items + 1] = entry
-                    validKeys[entry.key] = not entry.disenchantBlocked
+                    validKeys[entry.key] = not entry.disenchantBlocked and not entry.excluded
                 end
             else
                 itemLoadRetries[bag .. ":" .. slot] = nil
@@ -963,6 +957,7 @@ local function PreviewForItem(item)
 end
 
 local function ClearListRow(row)
+    if GameTooltip:IsOwned(row) or (row.exclude and GameTooltip:IsOwned(row.exclude)) then GameTooltip:Hide() end
     row.item = nil
     row.icon:SetTexture(nil)
     row.icon:SetDesaturated(false)
@@ -981,9 +976,10 @@ local function ClearListRow(row)
 end
 
 local function SetListRowItem(row, item)
+    if row.item ~= item and (GameTooltip:IsOwned(row) or GameTooltip:IsOwned(row.exclude)) then GameTooltip:Hide() end
     row.item = item
     if row.preview then row.preview:SetText(PreviewForItem(item)) end
-    local blocked = item.disenchantBlocked == true
+    local blocked = item.disenchantBlocked == true or item.excluded == true
     local isSelected = not blocked and selected[item.key] == true
     if blocked then
         row:RegisterForClicks()
@@ -1001,12 +997,11 @@ local function SetListRowItem(row, item)
         ns.SettingsTheme:PaintItemBorder(row.iconBorder.edge, item.quality)
     end
     row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-    row.icon:SetDesaturated(not isSelected)
-    if isSelected then
-        row.icon:SetVertexColor(1, 1, 1, 1)
-    else
-        row.icon:SetVertexColor(0.45, 0.45, 0.45, 1)
-    end
+    row.icon:SetDesaturated(blocked)
+    row.icon:SetVertexColor(blocked and 0.55 or 1, blocked and 0.55 or 1, blocked and 0.55 or 1, 1)
+    row.exclude:SetText(item.excluded and "+" or "x")
+    ns.SettingsTheme:PaintButton(row.exclude, item.excluded == true)
+    if row.preview then row.preview:SetAlpha(blocked and 0.6 or 1) end
 
     local countText = item.count and item.count > 1 and (" x" .. item.count) or ""
     local hasLevel = (item.itemLevel or 0) > 0
@@ -1045,7 +1040,7 @@ local function SetListRowItem(row, item)
         row.levelText:ClearAllPoints()
         row.levelText:SetPoint("RIGHT", trailing, "LEFT", -6, 0)
         row.label:ClearAllPoints()
-        row.label:SetPoint("LEFT", row.iconBorder, "RIGHT", 8, 8)
+        row.label:SetPoint("LEFT", row.iconBorder, "RIGHT", 8, row.titleOffset or 8)
         row.label:SetPoint("RIGHT", hasLevel and row.levelText or trailing, "LEFT", -4, 0)
     end
 
@@ -1055,7 +1050,7 @@ end
 
 -- Changing the queue refreshes the secure cast button and panel layout.
 local function SetItemSelected(item, checked)
-    if not item or item.disenchantBlocked then
+    if not item or item.disenchantBlocked or item.excluded or IsBlacklistedItem(item.link) then
         return
     end
     if InCombatLockdown() then
@@ -1087,8 +1082,36 @@ local function CreateListRow(parent)
     checkbox:SetPoint("LEFT", 0, 0)
     row.checkbox = checkbox
 
+    local exclude = ns.Style.Button(row)
+    exclude:SetSize(22, 22)
+    exclude:SetPoint("LEFT", checkbox, "RIGHT", 5, 0)
+    exclude:SetScript("OnClick", function()
+        local item = row.item
+        if not item then return end
+        if InCombatLockdown() then Print(L["NOT_IN_COMBAT"]); return end
+        if GetBagItemLinkSafe(item.bag, item.slot) ~= item.link
+            or ComputeItemKey(item.bag, item.slot, item.link) ~= item.key then
+            RefreshList()
+            return
+        end
+        ns.ToggleItemExclusion(item)
+    end)
+    exclude:HookScript("OnEnter", function(self)
+        if not row.item then return end
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(L[row.item.excluded and "INCLUDE_ITEM" or "EXCLUDE_ITEM"])
+        GameTooltip:Show()
+    end)
+    exclude:HookScript("OnLeave", function(self)
+        if GameTooltip:IsOwned(self) then GameTooltip:Hide() end
+    end)
+    exclude:HookScript("OnHide", function(self)
+        if GameTooltip:IsOwned(self) then GameTooltip:Hide() end
+    end)
+    row.exclude = exclude
+
     local iconBorder = CreateIconBorder(row, 24)
-    iconBorder:SetPoint("LEFT", checkbox, "RIGHT", 4, 0)
+    iconBorder:SetPoint("LEFT", exclude, "RIGHT", 7, 0)
     iconBorder:SetFrameLevel(row:GetFrameLevel() + 1)
     row.iconBorder = iconBorder
 
@@ -1097,12 +1120,14 @@ local function CreateListRow(parent)
     local bindText = ns.InterfaceFonts:CreateText(row, "OVERLAY", "GameFontNormalSmall", db)
     bindText:SetPoint("RIGHT", row, "RIGHT", -8, 8)
     bindText:SetWidth(56)
+    bindText:SetHeight(18)
     bindText:SetJustifyH("RIGHT")
     row.bindText = bindText
 
     local valueText = ns.InterfaceFonts:CreateText(row, "OVERLAY", "GameFontNormalSmall", db)
     valueText:SetPoint("RIGHT", bindText, "LEFT", -6, 0)
     valueText:SetWidth(112)
+    valueText:SetHeight(18)
     valueText:SetJustifyH("RIGHT")
     valueText:SetTextColor(1, 0.82, 0)
     row.valueText = valueText
@@ -1112,15 +1137,18 @@ local function CreateListRow(parent)
     label:SetPoint("RIGHT", valueText, "LEFT", -4, 0)
     label:SetJustifyH("LEFT")
     label:SetWordWrap(false)
+    label:SetHeight(18)
     row.label = label
     local levelText = ns.InterfaceFonts:CreateText(row, "OVERLAY", "GameFontNormalSmall", db)
     levelText:SetTextColor(0.85, 0.85, 0.85)
     levelText:SetWordWrap(false)
+    levelText:SetHeight(18)
     row.levelText = levelText
 
     local preview = ns.InterfaceFonts:CreateText(row, "OVERLAY", "GameFontNormalSmall", db)
-    preview:SetPoint("TOPLEFT", label, "BOTTOMLEFT", 0, -4)
-    preview:SetPoint("RIGHT", row, "RIGHT", -8, 0)
+    preview:SetPoint("TOPLEFT", label, "BOTTOMLEFT", 0, -2)
+    preview:SetPoint("TOPRIGHT", row, "RIGHT", -8, -3)
+    preview:SetHeight(20)
     preview:SetJustifyH("LEFT")
     preview:SetWordWrap(false)
     preview:SetTextColor(0.75, 0.8, 0.9)
@@ -1146,6 +1174,9 @@ local function CreateListRow(parent)
         end
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:SetBagItem(self.item.bag, self.item.slot)
+        if self.item.excluded then
+            GameTooltip:AddLine(L["EXCLUDED_ITEM"], 0.8, 0.8, 0.8, true)
+        end
         if self.item.disenchantBlocked then
             GameTooltip:AddLine(L["CANNOT_DISENCHANT_ITEM"], 0.8, 0.8, 0.8, true)
             GameTooltip:Show()
@@ -1191,6 +1222,7 @@ local function CreateQueueRow(parent)
     row.label = label
 
     local removeButton = ns.Style.Button(row)
+    row.removeButton = removeButton
     removeButton:SetSize(56, 20)
     removeButton:SetPoint("RIGHT", row, "RIGHT", -2, 0)
     removeButton:SetText(L["DELETE"])
@@ -1202,21 +1234,100 @@ local function CreateQueueRow(parent)
     return row
 end
 
-local function UpdateListRows()
-    if not listScrollFrame or not listScrollChild then
-        return
+local RequestRowsRefresh
+local rowsRevision = 0
+
+local function CreateRowsViewport(parent)
+    -- Like Vendor's item pages, rows live directly in a fixed-size viewport.
+    local view = CreateFrame("Frame", nil, parent)
+    view:SetClipsChildren(true)
+    view.offset, view.range = 0, 0
+    local bar = CreateFrame("Slider", nil, parent)
+    bar:SetOrientation("VERTICAL")
+    bar:SetValueStep(1)
+    bar:SetObeyStepOnDrag(true)
+    bar:SetWidth(9)
+    bar:SetPoint("TOPLEFT", view, "TOPRIGHT", 4, 0)
+    bar:SetPoint("BOTTOMLEFT", view, "BOTTOMRIGHT", 4, 0)
+    ns.SettingsTheme:SkinScrollBar(bar, 6, 28)
+    view.bar = bar
+    local syncing
+
+    function view:SetOffset(value)
+        if InCombatLockdown() then return end
+        value = math.max(0, math.min(self.range, math.floor(value + .5)))
+        if self.offset == value then return end
+        self.offset = value
+        RequestRowsRefresh()
     end
 
-    local width = math.max(100, (listScrollFrame:GetWidth() or 0) - 24)
-    listScrollChild:SetWidth(width)
-    local y = 0
+    function view:VisibleRange(count, rowHeight, spacing)
+        local width, height = self:GetWidth(), self:GetHeight()
+        if not width or not height or width <= 0 or height <= 0 then return end
+        local capacity = math.max(0, math.floor((height + spacing) / (rowHeight + spacing)))
+        self.range = math.max(0, count - capacity)
+        self.offset = math.max(0, math.min(self.range, self.offset))
+        syncing = true
+        bar:SetMinMaxValues(0, self.range)
+        bar:SetValue(self.offset)
+        syncing = nil
+        local scrollable = capacity > 0 and self.range > 0 and self:IsVisible()
+        bar:SetShown(scrollable)
+        bar:EnableMouse(scrollable)
+        return self.offset, math.min(capacity, count - self.offset), math.max(1, math.floor(width))
+    end
+
+    bar:SetScript("OnValueChanged", function(_, value)
+        if not syncing then view:SetOffset(value) end
+    end)
+    view:EnableMouseWheel(true)
+    view:SetScript("OnMouseWheel", function(_, delta) view:SetOffset(view.offset - delta * 3) end)
+    view:HookScript("OnSizeChanged", function() RequestRowsRefresh() end)
+    view:HookScript("OnShow", function() RequestRowsRefresh() end)
+    view:HookScript("OnHide", function() bar:Hide() end)
+    bar:Hide()
+    return view
+end
+
+local function PositionVisibleRow(row, view, slot, width, height, spacing)
+    local y = -(slot - 1) * (height + spacing)
+    if row.layoutY ~= y then
+        row:ClearAllPoints()
+        row:SetPoint("TOPLEFT", view, "TOPLEFT", 0, y)
+        row.layoutY = y
+    end
+    if row.layoutHeight ~= height then
+        row:SetHeight(height)
+        row.layoutHeight = height
+        if row.preview then
+            row.titleOffset = height > ROW_HEIGHT and 8 or 0
+            row.checkbox:ClearAllPoints()
+            row.checkbox:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -(height - 22) / 2)
+            row.bindText:ClearAllPoints()
+            row.bindText:SetPoint("TOPRIGHT", row, "TOPRIGHT", -8, -height / 2 + row.titleOffset + 9)
+            row.label:SetPoint("LEFT", row.iconBorder, "RIGHT", 8, row.titleOffset)
+            row.preview:SetPoint("TOPRIGHT", row, "TOPRIGHT", -8, -height / 2 + row.titleOffset - 11)
+        else
+            row.iconBorder:ClearAllPoints()
+            row.iconBorder:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -(height - 20) / 2)
+        end
+    end
+    if row.layoutWidth ~= width then
+        row:SetWidth(width)
+        row.layoutWidth = width
+    end
+end
+
+local function UpdateListRows()
+    if not listScrollFrame or not listScrollFrame:IsVisible() then return end
+    local height = activeMode.key == "disenchant" and db.showExpected ~= false and 54 or ROW_HEIGHT
+    local offset, visible, width = listScrollFrame:VisibleRange(#items, height, ROW_SPACING)
+    if not offset then return end
     local empty = listScrollFrame.empty
     if empty then
         local message
         if (ns.waitingForItems or 0) > 0 then
             message = string.format(L["WAITING_FOR_ITEMS"], ns.waitingForItems)
-        elseif hasExcludedBagItems then
-            message = L["LIST_EMPTY_EXCLUDED"]
         else
             message = L[activeMode.emptyTextKey or "COMPACT_EMPTY"]
         end
@@ -1224,77 +1335,73 @@ local function UpdateListRows()
         empty:SetShown(#items == 0)
     end
 
-    for index, item in ipairs(items) do
-        local row = listRows[index]
+    for slot = 1, visible do
+        local index = offset + slot
+        local item = items[index]
+        local row = listRows[slot]
         if not row then
-            row = CreateListRow(listScrollChild)
-            listRows[index] = row
+            row = CreateListRow(listScrollFrame)
+            listRows[slot] = row
         end
-
-        row:ClearAllPoints()
-        row:SetPoint("TOPLEFT", listScrollChild, "TOPLEFT", 0, -y)
-        row:SetPoint("RIGHT", listScrollChild, "RIGHT", 0, 0)
-        row.band:SetShown(index % 2 == 1)
-        SetListRowItem(row, item)
-        local height = activeMode.key == "disenchant" and db.showExpected ~= false and 54 or ROW_HEIGHT
-        row:SetHeight(height)
-        y = y + height + ROW_SPACING
+        PositionVisibleRow(row, listScrollFrame, slot, width, height, ROW_SPACING)
+        if row.item ~= item or row.dataRevision ~= rowsRevision then
+            row.band:SetShown(index % 2 == 1)
+            SetListRowItem(row, item)
+            row.dataRevision = rowsRevision
+        end
     end
-
-    for index = #items + 1, #listRows do
-        -- Full clear, not just Hide: a hidden row otherwise keeps its stale
-        -- item reference (and checkbox state) until it is reused.
-        ClearListRow(listRows[index])
+    for slot = visible + 1, #listRows do
+        if listRows[slot].item then ClearListRow(listRows[slot]) end
     end
-
-    local totalHeight = math.max(listScrollFrame:GetHeight() or 1, y)
-    listScrollChild:SetHeight(totalHeight)
 end
 
 local function UpdateQueueRows()
-    if not queueScrollFrame or not queueScrollChild then
-        return
-    end
-
-    local width = math.max(100, (queueScrollFrame:GetWidth() or 0) - 24)
-    queueScrollChild:SetWidth(width)
-    local y = 0
-
-    for index, item in ipairs(queue) do
-        local row = queueRows[index]
+    if not queueScrollFrame or not queueScrollFrame:IsVisible() then return end
+    local offset, visible, width = queueScrollFrame:VisibleRange(#queue, 24, 2)
+    if not offset then return end
+    for slot = 1, visible do
+        local index = offset + slot
+        local item = queue[index]
+        local row = queueRows[slot]
         if not row then
-            row = CreateQueueRow(queueScrollChild)
-            queueRows[index] = row
+            row = CreateQueueRow(queueScrollFrame)
+            queueRows[slot] = row
         end
-
-        row.item = item
-        row:ClearAllPoints()
-        row:SetPoint("TOPLEFT", queueScrollChild, "TOPLEFT", 0, -y)
-        row:SetPoint("RIGHT", queueScrollChild, "RIGHT", 0, 0)
-        row.icon:SetTexture(item.texture or 134400)
-        ns.SettingsTheme:PaintItemBorder(row.iconBorder.edge, item.quality)
-        row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-
-        local labelText = item.name or L["UNKNOWN"]
-        if index == 1 then
-            row.label:SetText("1. " .. labelText)
-            row.label:SetTextColor(1, 0.82, 0)
-        else
-            row.label:SetText(index .. ". " .. labelText)
-            row.label:SetTextColor(0.9, 0.9, 0.9)
+        PositionVisibleRow(row, queueScrollFrame, slot, width, 24, 2)
+        if row.item ~= item or row.dataRevision ~= rowsRevision or row.queueIndex ~= index then
+            row.item, row.queueIndex, row.dataRevision = item, index, rowsRevision
+            row.icon:SetTexture(item.texture or 134400)
+            ns.SettingsTheme:PaintItemBorder(row.iconBorder.edge, item.quality)
+            row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+            row.label:SetText(index .. ". " .. (item.name or L["UNKNOWN"]))
+            if index == 1 then row.label:SetTextColor(1, 0.82, 0)
+            else row.label:SetTextColor(0.9, 0.9, 0.9) end
+            row:Show()
         end
-
-        row:Show()
-        y = y + 26
     end
-
-    for index = #queue + 1, #queueRows do
-        queueRows[index].item = nil
-        queueRows[index]:Hide()
+    for slot = visible + 1, #queueRows do
+        if queueRows[slot].item then
+            queueRows[slot].item = nil
+            queueRows[slot]:Hide()
+        end
     end
+end
 
-    local totalHeight = math.max(queueScrollFrame:GetHeight() or 1, y)
-    queueScrollChild:SetHeight(totalHeight)
+local rowsRefreshQueued = false
+RequestRowsRefresh = function(refreshData)
+    if refreshData == true then rowsRevision = rowsRevision + 1 end
+    if rowsRefreshQueued then return end
+    rowsRefreshQueued = true
+    -- Frame dimensions can still be unresolved when Show or anchor changes return.
+    C_Timer.After(0, function()
+        rowsRefreshQueued = false
+        if InCombatLockdown() then
+            needsRefreshAfterCombat = true
+            return
+        end
+        UpdateListRows()
+        UpdateQueueRows()
+    end)
 end
 
 local function ClassifyDisenchantFailure(message, errorName)
@@ -1526,27 +1633,38 @@ local function ExtractMessageFromEventArgs(...)
     return nil
 end
 
-local function AddItemToBlacklist(item, messagePrefix)
+local function AddItemToBlacklist(item)
+    if InCombatLockdown() then Print(L["NOT_IN_COMBAT"]); return end
     if not item or not db or not db.blacklist then
         return
     end
 
     local blacklistKey = GetBlacklistKeyFromLink(item.link)
-    if blacklistKey then
-        GetModeBlacklist()[blacklistKey] = true
-    end
+    if not blacklistKey then return end
+    GetModeBlacklist()[blacklistKey] = true
 
-    if item.key then
-        selected[item.key] = nil
-    end
-
-    if messagePrefix ~= false then
-        Print(string.format("%s: %s", messagePrefix, item.name or L["UNKNOWN"]))
+    for _, candidate in ipairs(items) do
+        if GetBlacklistKeyFromLink(candidate.link) == blacklistKey then
+            selected[candidate.key] = nil
+        end
     end
 
     if not RefreshList() then return end
     if blacklistFrame and blacklistFrame:IsShown() and RefreshBlacklistUI then
         RefreshBlacklistUI()
+    end
+end
+
+function ns.ToggleItemExclusion(item)
+    if not item or not db or InCombatLockdown() then return end
+    local key = GetBlacklistKeyFromLink(item.link)
+    if not key then return end
+    if GetModeBlacklist()[key] then
+        GetModeBlacklist()[key] = nil
+        RefreshList()
+        if blacklistFrame and blacklistFrame:IsShown() and RefreshBlacklistUI then RefreshBlacklistUI() end
+    else
+        AddItemToBlacklist(item)
     end
 end
 
@@ -1655,9 +1773,6 @@ local function UpdateQueueButton()
     -- the label and the explanatory info text.
     local function Disarm(buttonLabel, infoText)
         queueButton:Disable()
-        if manualBlacklistButton then
-            manualBlacklistButton:Disable()
-        end
         ClearQueueButtonAttributes()
         UpdateQueueButtonVisual(buttonLabel)
         if queueInfoText then
@@ -1699,9 +1814,6 @@ local function UpdateQueueButton()
     queueButton:SetAttribute("target-bag", item.bag)
     queueButton:SetAttribute("target-slot", item.slot)
     queueButton:Enable()
-    if manualBlacklistButton then
-        manualBlacklistButton:Enable()
-    end
     UpdateQueueButtonVisual(label)
 
     if queueInfoText then
@@ -1720,12 +1832,12 @@ function ns.ProfessionViews.SyncAction()
     -- Copy the visible queue's geometry without making the Blizzard panel an
     -- anchor of a protected frame. Its position can change independently.
     local scale = queuePanel:GetEffectiveScale() / queueButton:GetEffectiveScale()
-    local x, y = (left + 16) * scale, (bottom + 12) * scale
+    local x, y = (left + queuePanel:GetWidth() - 16 - 122) * scale, (bottom + 12) * scale
     if x ~= queueButton.professionX or y ~= queueButton.professionY or scale ~= queueButton.professionScale then
         queueButton.professionX, queueButton.professionY, queueButton.professionScale = x, y, scale
         queueButton:ClearAllPoints()
         queueButton:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", x, y)
-        queueButton:SetSize(138 * scale, 24 * scale)
+        queueButton:SetSize(122 * scale, 24 * scale)
     end
     if not queueButton:IsShown() then queueButton:Show() end
 end
@@ -1738,23 +1850,32 @@ local function UpdateLayout()
     local topOffset = modeTabFrame and modeTabFrame:IsShown() and -67 or -44
     if not mainFrame.professionContent then topOffset = topOffset - 16 end
     local bottomInset = mainFrame.professionContent and 16 or 56
+    local hasQueue = #queue > 0
+    local layout = mainContent.listLayout
+    if layout and layout.top == topOffset and layout.bottom == bottomInset and layout.hasQueue == hasQueue then
+        ns.ProfessionViews.SyncAction()
+        return
+    end
 
-    queuePanel:ClearAllPoints()
+    -- Replace individual anchors without temporarily collapsing the clipped viewports.
     queuePanel:SetPoint("TOPRIGHT", mainContent, "TOPRIGHT", -16, topOffset)
     queuePanel:SetPoint("BOTTOMRIGHT", mainContent, "BOTTOMRIGHT", -16, bottomInset)
     queuePanel:SetWidth(QUEUE_PANEL_WIDTH)
 
-    listPanel:ClearAllPoints()
     listPanel:SetPoint("TOPLEFT", mainContent, "TOPLEFT", 16, topOffset)
-    listPanel:SetPoint("BOTTOMLEFT", mainContent, "BOTTOMLEFT", 16, bottomInset)
 
-    if #queue > 0 then
+    if hasQueue then
         queuePanel:Show()
-        listPanel:SetPoint("RIGHT", queuePanel, "LEFT", -12, 0)
+        listPanel:SetPoint("BOTTOMRIGHT", queuePanel, "BOTTOMLEFT", -12, 0)
+        mainContent.compactModeButton:ClearAllPoints()
+        mainContent.compactModeButton:SetPoint("BOTTOMRIGHT", queuePanel, "BOTTOMRIGHT", -154, 12)
+        mainContent.compactModeButton:Show()
     else
-        listPanel:SetPoint("RIGHT", mainContent, "RIGHT", -16, 0)
+        listPanel:SetPoint("BOTTOMRIGHT", mainContent, "BOTTOMRIGHT", -16, bottomInset)
         queuePanel:Hide()
+        mainContent.compactModeButton:Hide()
     end
+    mainContent.listLayout = {top = topOffset, bottom = bottomInset, hasQueue = hasQueue}
     ns.ProfessionViews.SyncAction()
 end
 
@@ -1773,8 +1894,7 @@ RefreshUI = function()
     if not InCombatLockdown() then
         UpdateLayout()
     end
-    UpdateListRows()
-    UpdateQueueRows()
+    RequestRowsRefresh(true)
     UpdateStatusText()
     UpdateQueueButton()
     UpdateCompactFrame()
@@ -1816,8 +1936,8 @@ local function DockQueueButtonToPanel()
     end
     queueButton:SetParent(queuePanel)
     queueButton:ClearAllPoints()
-    queueButton:SetPoint("BOTTOMLEFT", queuePanel, "BOTTOMLEFT", 16, 12)
-    queueButton:SetSize(138, 24)
+    queueButton:SetPoint("BOTTOMRIGHT", queuePanel, "BOTTOMRIGHT", -16, 12)
+    queueButton:SetSize(122, 24)
 end
 
 local function GetCompactSkippedText()
@@ -1857,11 +1977,17 @@ UpdateCompactFrame = function()
             compactNameText:SetTextColor(1, 1, 1)
         end
 
-        local queueLabel = string.format(L[activeMode.queueTextKey], #queue)
-        if skippedText then
-            queueLabel = queueLabel .. "  |  " .. skippedText
+        local nextItem = (item.count or 1) >= (activeMode.minStack or 1) * 2 and item or queue[2]
+        local nextLabel = ""
+        if nextItem then
+            local name = nextItem.name or L["UNKNOWN"]
+            local nextColor = ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[nextItem.quality]
+            if nextColor and nextColor.hex then name = nextColor.hex .. name .. "|r" end
+            nextLabel = string.format(L["COMPACT_NEXT"],
+                "|T" .. (nextItem.texture or 134400) .. ":16:16:0:0|t " .. name)
         end
-        compactQueueText:SetText(queueLabel)
+        if skippedText then nextLabel = nextLabel ~= "" and (nextLabel .. "  |  " .. skippedText) or skippedText end
+        compactQueueText:SetText(nextLabel)
     else
         compactIcon:SetTexture((activeMode.icon and activeMode.icon()) or 134400)
         ns.SettingsTheme:PaintItemBorder(compactIcon:GetParent().edge)
@@ -1871,18 +1997,14 @@ UpdateCompactFrame = function()
         compactQueueText:SetText(skippedText or "")
     end
 
-    -- Fit the bar to whichever line is wider. The skipped-value message is
-    -- often longer than the item name and must not run under the cast button.
     local nameWidth = compactNameText:GetStringWidth() or 0
-    local queueWidth = compactQueueText:GetStringWidth() or 0
-    local contentWidth = math.max(nameWidth, queueWidth)
+    local previewWidth = compactPreviewText and compactPreviewText:GetStringWidth() or 0
     local modeWidth = compactModeSelector and compactModeSelector:IsShown() and 98 or 0
     -- Compact owns a secure button: dimensions may only change out of combat.
     if not InCombatLockdown() then
-        compactFrame:SetHeight(preview ~= "" and 84 or 58)
-        local previewWidth = compactPreviewText and compactPreviewText:GetStringWidth() or 0
+        compactFrame:SetHeight((preview ~= "" or compactQueueText:GetText() ~= "") and 84 or 58)
         compactFrame:SetWidth(math.max(400 + modeWidth, math.min(620 + modeWidth,
-            math.max(math.floor(contentWidth + 0.5) + 278 + modeWidth, previewWidth + 28))))
+            math.max(math.floor(nameWidth + 0.5) + 278 + modeWidth, previewWidth + 28))))
     end
 end
 
@@ -1910,6 +2032,7 @@ SetCompactMode = function(enabled)
         DockQueueButtonToPanel()
         if mainFrame then
             mainFrame:Show()
+            if listScrollFrame then listScrollFrame:SetOffset(0) end
             RefreshList()
         end
     end
@@ -1986,7 +2109,6 @@ local function CreateBlacklistRow(parent)
             GameTooltip:Hide()
         end
         GetModeBlacklist()[entry.key] = nil
-        Print(string.format(L["REMOVED_FROM_BLACKLIST"], entry.name or L["UNKNOWN"]))
         if RefreshBlacklistUI then
             RefreshBlacklistUI()
         end
@@ -2534,8 +2656,7 @@ local function CreateMainFrame()
     controlsFrame:SetPoint("BOTTOMRIGHT", -8, 8)
     controlsFrame:SetHeight(24)
 
-    listScrollFrame = CreateFrame("ScrollFrame", nil, listPanel, "BackdropTemplate")
-    ns.SettingsTheme:AttachScrollBar(listScrollFrame, listPanel)
+    listScrollFrame = CreateRowsViewport(listPanel)
     listScrollFrame:SetPoint("TOPLEFT", 8, -8)
     listScrollFrame:SetPoint("BOTTOMRIGHT", controlsFrame, "TOPRIGHT", -22, 8)
 
@@ -2547,10 +2668,6 @@ local function CreateMainFrame()
     empty:SetWordWrap(true)
     empty:Hide()
     listScrollFrame.empty = empty
-
-    listScrollChild = CreateFrame("Frame", nil, listScrollFrame)
-    listScrollChild:SetSize(1, 1)
-    listScrollFrame:SetScrollChild(listScrollChild)
 
     local refreshButton = ns.Style.Button(controlsFrame)
     refreshButton:SetSize(86, 22)
@@ -2645,20 +2762,43 @@ local function CreateMainFrame()
     queueTitle:SetText(L["QUEUE_TITLE"])
 
     blacklistOpenButton = ns.Style.Button(mainContent)
-    blacklistOpenButton:SetSize(128, 22)
-    blacklistOpenButton:SetPoint("RIGHT", mainFrame.CloseButton, "LEFT", -8, 0)
+    blacklistOpenButton:SetSize(24, 22)
     -- No custom strata: the button inherits the main window's layer and only
     -- rises above the title bar within it - so it correctly disappears when
     -- the window sits behind other windows.
     blacklistOpenButton:SetFrameLevel(mainFrame:GetFrameLevel() + 10)
-    blacklistOpenButton:SetText(L["OPEN_BLACKLIST"])
+    for index = 1, 3 do
+        local line = blacklistOpenButton:CreateTexture(nil, "ARTWORK")
+        line:SetColorTexture(unpack(ns.SettingsTheme.accent))
+        line:SetSize(9, 1)
+        line:SetPoint("TOPLEFT", 4, -5 - (index - 1) * 5)
+    end
+    for index = 1, 2 do
+        local stroke = blacklistOpenButton:CreateTexture(nil, "ARTWORK")
+        stroke:SetColorTexture(unpack(ns.SettingsTheme.accent))
+        stroke:SetSize(8, 1.5)
+        stroke:SetPoint("BOTTOMRIGHT", -3, 5)
+        stroke:SetRotation(index == 1 and math.pi / 4 or -math.pi / 4)
+    end
+    blacklistOpenButton:HookScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+        GameTooltip:SetText(L["BLACKLIST_TITLE"])
+        GameTooltip:Show()
+    end)
+    blacklistOpenButton:HookScript("OnLeave", function(self)
+        if GameTooltip:IsOwned(self) then GameTooltip:Hide() end
+    end)
+    blacklistOpenButton:HookScript("OnHide", function(self)
+        if GameTooltip:IsOwned(self) then GameTooltip:Hide() end
+    end)
     blacklistOpenButton:SetScript("OnClick", function()
         ToggleBlacklistFrame()
     end)
 
     local compactModeButton = ns.Style.Button(mainContent)
-    compactModeButton:SetSize(80, 22)
-    compactModeButton:SetPoint("RIGHT", blacklistOpenButton, "LEFT", -8, 0)
+    mainContent.compactModeButton = compactModeButton
+    compactModeButton:SetSize(80, 24)
+    compactModeButton:Hide()
     compactModeButton:SetFrameLevel(mainFrame:GetFrameLevel() + 10)
     compactModeButton:SetText(L["COMPACT_BUTTON"])
     compactModeButton:SetScript("OnClick", function()
@@ -2669,8 +2809,9 @@ local function CreateMainFrame()
     end)
 
     local settingsButton = ns.Style.Button(mainContent)
+    mainContent.settingsButton = settingsButton
     settingsButton:SetSize(80, 22)
-    settingsButton:SetPoint("RIGHT", compactModeButton, "LEFT", -8, 0)
+    settingsButton:SetPoint("RIGHT", mainFrame.CloseButton, "LEFT", -8, 0)
     settingsButton:SetFrameLevel(mainFrame:GetFrameLevel() + 10)
     settingsButton:SetText(L["SETTINGS_BUTTON"])
     settingsButton:SetScript("OnClick", function()
@@ -2679,10 +2820,19 @@ local function CreateMainFrame()
 
     local statsButton = ns.Style.Button(mainContent)
     mainContent.statsButton = statsButton
+    local titlePoint = { mainFrame.title:GetPoint(1) }
+    function mainContent:AnchorMainTitle()
+        mainFrame.title:ClearAllPoints()
+        mainFrame.title:SetPoint(unpack(titlePoint))
+        if not mainFrame.TitleBar.version then
+            mainFrame.title:SetPoint("RIGHT", blacklistOpenButton, "LEFT", -12, 0)
+        end
+    end
     statsButton:SetSize(80, 22)
     statsButton:SetPoint("RIGHT", settingsButton, "LEFT", -8, 0)
+    blacklistOpenButton:SetPoint("RIGHT", statsButton, "LEFT", -8, 0)
     statsButton:SetFrameLevel(mainFrame:GetFrameLevel() + 10)
-    mainFrame.title:SetPoint("RIGHT", statsButton, "LEFT", -12, 0)
+    mainContent:AnchorMainTitle()
     statsButton:SetText(L["STATS_BUTTON"])
     statsButton:SetScript("OnClick", function()
         ToggleStatsFrame()
@@ -2700,18 +2850,13 @@ local function CreateMainFrame()
     divider:SetPoint("TOPRIGHT", -10, -54)
     divider:SetHeight(1)
 
-    queueScrollFrame = CreateFrame("ScrollFrame", nil, queuePanel, "BackdropTemplate")
-    ns.SettingsTheme:AttachScrollBar(queueScrollFrame, queuePanel)
+    queueScrollFrame = CreateRowsViewport(queuePanel)
     queueScrollFrame:SetPoint("TOPLEFT", 8, -60)
     queueScrollFrame:SetPoint("BOTTOMRIGHT", -30, 46)
 
-    queueScrollChild = CreateFrame("Frame", nil, queueScrollFrame)
-    queueScrollChild:SetSize(1, 1)
-    queueScrollFrame:SetScrollChild(queueScrollChild)
-
     queueButton = ns.Style.Button(queuePanel, QUEUE_BUTTON_NAME, true)
-    queueButton:SetSize(138, 24)
-    queueButton:SetPoint("BOTTOMLEFT", queuePanel, "BOTTOMLEFT", 16, 12)
+    queueButton:SetSize(122, 24)
+    queueButton:SetPoint("BOTTOMRIGHT", queuePanel, "BOTTOMRIGHT", -16, 12)
     UpdateQueueButtonClickRegistration()
     queueButton:EnableMouse(true)
     queueButtonText = queueButton:GetFontString()
@@ -2765,7 +2910,7 @@ local function CreateMainFrame()
         local item = queue[1]
         local armedBag = self:GetAttribute("target-bag")
         local armedSlot = self:GetAttribute("target-slot")
-        if not item or item.bag ~= armedBag or item.slot ~= armedSlot
+        if not item or IsBlacklistedItem(item.link) or item.bag ~= armedBag or item.slot ~= armedSlot
             or GetBagItemLinkSafe(item.bag, item.slot) ~= item.link
             or ComputeItemKey(item.bag, item.slot, item.link) ~= item.key then
             ClearQueueButtonAttributes()
@@ -2801,27 +2946,6 @@ local function CreateMainFrame()
         end
     end)
 
-    manualBlacklistButton = ns.Style.Button(queuePanel)
-    manualBlacklistButton:SetSize(138, 22)
-    manualBlacklistButton:SetPoint("BOTTOMLEFT", queuePanel, "BOTTOMLEFT", 162, 13)
-    manualBlacklistButton:SetText(L["BLACKLIST_ITEM_BUTTON"])
-    manualBlacklistButton:SetScript("OnClick", function()
-        local item = queue and queue[1]
-        if not item then
-            Print(L["NO_QUEUE_ITEM"])
-            return
-        end
-        AddItemToBlacklist(item, L["ADDED_MANUAL"])
-    end)
-
-    listScrollFrame:HookScript("OnSizeChanged", function()
-        UpdateListRows()
-    end)
-
-    queueScrollFrame:HookScript("OnSizeChanged", function()
-        UpdateQueueRows()
-    end)
-
     blacklistFrame = CreateStyledWindow("Sintezza_Disenchant_BlacklistFrame", 500, 420)
     blacklistFrame:SetPoint("CENTER", UIParent, "CENTER", 300, 0)
     blacklistFrame:Hide()
@@ -2849,7 +2973,6 @@ local function CreateMainFrame()
     clearBlacklistButton:SetText(L["CLEAR_ALL"])
     clearBlacklistButton:SetScript("OnClick", function()
         wipe(GetModeBlacklist())
-        Print(L["BLACKLIST_CLEARED"])
         RefreshBlacklistUI()
         RefreshList()
     end)
@@ -2939,12 +3062,12 @@ local function CreateCompactFrame()
             return
         end
         GameTooltip:Hide()
-        AddItemToBlacklist(item, L["ADDED_MANUAL"])
+        AddItemToBlacklist(item)
     end)
 
     compactFullButton = ns.Style.Button(compactFrame)
-    compactFullButton:SetSize(48, 20)
-    compactFullButton:SetPoint("TOPRIGHT", compactFrame, "TOPRIGHT", -24, -18)
+    compactFullButton:SetSize(48, 24)
+    compactFullButton:SetPoint("TOPRIGHT", compactFrame, "TOPRIGHT", -24, -16)
     compactFullButton:SetText(L["FULL_BUTTON"])
     compactFullButton:SetScript("OnClick", function()
         SetCompactMode(false)
@@ -2981,14 +3104,15 @@ local function CreateCompactFrame()
     compactNameText:SetWordWrap(false)
 
     compactQueueText = ns.InterfaceFonts:CreateText(compactFrame, "OVERLAY", "GameFontNormalSmall", db)
-    compactQueueText:SetPoint("BOTTOMLEFT", iconBorder, "BOTTOMRIGHT", 8, 2)
-    compactQueueText:SetPoint("RIGHT", compactNameText, "RIGHT", 0, 0)
+    compactQueueText:SetPoint("BOTTOMLEFT", compactFrame, "BOTTOMLEFT", 14, 8)
+    compactQueueText:SetPoint("RIGHT", compactFrame, "RIGHT", -14, 0)
     compactQueueText:SetJustifyH("LEFT")
+    compactQueueText:SetWordWrap(false)
     compactQueueText:SetTextColor(0.75, 0.75, 0.75)
 
     compactPreviewText = ns.InterfaceFonts:CreateText(compactFrame, "OVERLAY", "GameFontNormalSmall", db)
-    compactPreviewText:SetPoint("BOTTOMLEFT", compactFrame, "BOTTOMLEFT", 14, 8)
-    compactPreviewText:SetPoint("RIGHT", compactFrame, "RIGHT", -14, 0)
+    compactPreviewText:SetPoint("BOTTOMLEFT", iconBorder, "BOTTOMRIGHT", 8, 2)
+    compactPreviewText:SetPoint("RIGHT", compactNameText, "RIGHT", 0, 0)
     compactPreviewText:SetJustifyH("LEFT")
     compactPreviewText:SetWordWrap(false)
     compactPreviewText:SetTextColor(0.75, 0.8, 0.9)
@@ -3248,13 +3372,23 @@ local function CreateSettingsFrame()
     end
     local function NumberRow(label, key, minimum, maximum, fraction, show)
         local row = W:SettingRow(body, label)
-        row.label:SetPoint("RIGHT", row, "RIGHT", -126, 0)
-        local edit = CreateFrame("EditBox", nil, row, "BackdropTemplate")
-        T:SkinInput(edit)
-        edit:SetSize(108, 22)
-        edit:SetPoint("RIGHT")
-        edit:SetAutoFocus(false)
-        edit:SetTextInsets(6, 6, 0, 0)
+        row.label:SetPoint("RIGHT", row, "RIGHT", -90, 0)
+        local unit = W:Label(row, "", 11, T.muted)
+        unit:SetPoint("RIGHT", row, "RIGHT", -2, 0)
+        if fraction then
+            local coin = C_CurrencyInfo and C_CurrencyInfo.GetCoinTextureString and C_CurrencyInfo.GetCoinTextureString(10000, 12)
+            unit:SetText(type(coin) == "string" and (coin:match("(|A:.-|a)") or coin:match("(|T.-|t)"))
+                or "|TInterface\\MoneyFrame\\UI-GoldIcon:12:12|t")
+            unit:SetWidth(16)
+        else
+            unit:SetText("ilvl")
+            unit:SetWidth(26)
+        end
+        local edit = W:EditBox(row, "", function() end)
+        edit:SetSize(50, 24)
+        edit:SetPoint("RIGHT", unit, "LEFT", -3, 0)
+        edit:SetTextInsets(5, 5, 0, 0)
+        edit:SetJustifyH("RIGHT")
         edit:SetMaxLetters(14)
         local function CurrentText() return db[key] and tostring(db[key]) or "" end
         function row:Refresh()
@@ -3283,7 +3417,7 @@ local function CreateSettingsFrame()
             skipping = true
             self:ClearFocus()
         end)
-        edit:SetScript("OnEditFocusLost", function()
+        edit:HookScript("OnEditFocusLost", function()
             if not skipping then Commit() end
             skipping = nil
             row:Refresh()
@@ -3293,16 +3427,46 @@ local function CreateSettingsFrame()
             W:SetInputError(row)
             self:ClearFocus()
         end)
-        W:EnableSettingsTab(edit)
         return Register(row, show)
     end
 
-    Add(Text(body, L["QUEUE_QUALITY"], 25, T.brass))
-    for _, quality in ipairs({ UNCOMMON_QUALITY, RARE_QUALITY, EPIC_QUALITY }) do
-        Toggle(L["QUALITY_" .. quality], function() return db.qualityFilter[quality] ~= false end, function(value)
-            db.qualityFilter[quality] = value
-            UpdateQueueSettings()
-        end)
+    do
+        local row = W:SettingRow(body, L["QUEUE_QUALITY"])
+        local button
+        local qualities = { UNCOMMON_QUALITY, RARE_QUALITY, EPIC_QUALITY }
+        local fallbackColors = { [2] = "|cff1eff00", [3] = "|cff0070dd", [4] = "|cffa335ee" }
+        local function ColoredName(quality)
+            local color = ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[quality]
+            return ((color and color.hex) or fallbackColors[quality]) .. L["QUALITY_" .. quality] .. "|r"
+        end
+        local function OpenQualityPicker()
+            local entries = {}
+            for _, quality in ipairs(qualities) do
+                local icon = db.qualityFilter[quality] ~= false and "UI-CheckBox-Check" or "UI-CheckBox-Up"
+                entries[#entries + 1] = { value = quality,
+                    label = "|TInterface\\Buttons\\" .. icon .. ":14:14|t " .. ColoredName(quality) }
+            end
+            T:OpenPicker(button, entries, nil, function(quality)
+                db.qualityFilter[quality] = db.qualityFilter[quality] == false
+                UpdateQueueSettings()
+                if button:IsVisible() then OpenQualityPicker() end
+            end)
+        end
+        button = W:Button(row, "", OpenQualityPicker)
+        T:DropdownArrow(button, button.text)
+        button:SetSize(230, 22)
+        button:SetPoint("RIGHT", row, "RIGHT", 0, 0)
+        row.label:ClearAllPoints()
+        row.label:SetPoint("LEFT")
+        row.label:SetPoint("RIGHT", button, "LEFT", -8, 0)
+        function row:Refresh()
+            local selected = {}
+            for _, quality in ipairs(qualities) do
+                if db.qualityFilter[quality] ~= false then selected[#selected + 1] = ColoredName(quality) end
+            end
+            button.text:SetText(#selected > 0 and table.concat(selected, ", ") or L["QUALITY_NONE"])
+        end
+        Register(row)
     end
     Add(Text(body, L["MODE_NO_PROTECTION_SETTINGS"], 42, T.muted), function() return not IsProtectionMode() end)
     ToggleField(L["GUARD_SET"], "protectSets", IsProtectionMode)
@@ -3326,21 +3490,13 @@ local function CreateSettingsFrame()
     local priceStatus = Add(Text(body, "", 34, T.muted), PriceEnabled)
     Add(Text(body, L["GUARD_MANUAL"], 30, T.muted), IsProtectionMode)
 
-    local expanded = false
-    local advanced = Add(W:Button(body, L["ADVANCED_SHOW"], function(button)
-        expanded = not expanded
-        button.text:SetText(L[expanded and "ADVANCED_HIDE" or "ADVANCED_SHOW"])
-        settingsFrame:RefreshProtection()
-    end))
-    advanced:SetHeight(28)
-    local function Advanced() return expanded end
     Toggle(L["PREVIEW_HELPER"], function() return db.showExpected ~= false end, function(value)
         db.showExpected = value
         RefreshUI()
-    end, Advanced)
+    end)
     Toggle(L["PREVIEW_EXTERNAL"], function() return db.externalItemTooltips == true end, function(value)
         db.externalItemTooltips = value
-    end, Advanced)
+    end)
 
     local function PriceStatus()
         if PriceProtectionThreshold() == nil then return L["PRICE_THRESHOLD_EMPTY"], T.warning end
@@ -3505,6 +3661,27 @@ local function ShowCheckCopyWindow(text)
     checkCopyFrame.edit:SetFocus()
 end
 
+local function DescribeViewport(view, rows, count)
+    if not view then return false, L["CHECK_VIEW_MISSING"] end
+    local shown, visible = 0, 0
+    for _, row in ipairs(rows) do
+        if row:IsShown() then shown = shown + 1 end
+        if row:IsVisible() then visible = visible + 1 end
+    end
+    local function Bounds(frame)
+        if not frame then return "-" end
+        local x, y, width, height = frame:GetRect()
+        return tostring(x) .. "," .. tostring(y) .. " " .. tostring(width) .. "x" .. tostring(height)
+    end
+    local first = rows[1]
+    local detail = L["CHECK_VIEW_STATE"]:format(
+        view:IsShown() and 1 or 0, view:IsVisible() and 1 or 0, count, shown, visible,
+        tostring(view.offset), tostring(view.range), rowsRefreshQueued and "1" or "0", Bounds(view),
+        Bounds(first), first and first:IsShown() and 1 or 0, first and first:IsVisible() and 1 or 0,
+        tostring(first and first:GetAlpha()), tostring(first and first.dataRevision), tostring(rowsRevision))
+    return rowsRefreshQueued or not view:IsVisible() or count == 0 or visible > 0, detail
+end
+
 local function RunSelfCheck(forceWindow)
     local lines = {}
     local anyFail = false
@@ -3525,7 +3702,7 @@ local function RunSelfCheck(forceWindow)
     elseif GetAddOnMetadata then
         meta = GetAddOnMetadata(ADDON_NAME, "Version")
     end
-    local header = L["CHECK_HEADER"]:format(meta or "1.1.0")
+    local header = L["CHECK_HEADER"]:format(meta or "1.2.0")
     lines[#lines + 1] = header
     Print(header)
 
@@ -3567,6 +3744,10 @@ local function RunSelfCheck(forceWindow)
     report(compactFrame ~= nil, L["COMPACT_BUTTON"])
     report(settingsFrame ~= nil, L["SETTINGS_TITLE"])
     report(blacklistFrame ~= nil, L["BLACKLIST_TITLE"])
+    local listOK, listDetails = DescribeViewport(listScrollFrame, listRows, #items)
+    report(listOK, L["CHECK_LIST_VIEW"], listDetails)
+    local queueOK, queueDetails = DescribeViewport(queueScrollFrame, queueRows, #queue)
+    report(queueOK, L["CHECK_QUEUE_VIEW"], queueDetails)
 
     -- Value guard / price providers (v1.5.0). Only a FAIL when the guard is on
     -- but no price addon answers - then the feature would silently do nothing.
@@ -3773,6 +3954,32 @@ SlashCmdList.SINTEZZA_DISENCHANT = function(msg)
     ToggleMainFrame()
 end
 
+function ns.RegisterEscapeHandling()
+    local names = {
+        "Sintezza_Disenchant_CheckFrame",
+        "Sintezza_Disenchant_SettingsFrame",
+        "Sintezza_Disenchant_BlacklistFrame",
+        "Sintezza_Disenchant_MailFrame",
+        "Sintezza_Disenchant_CompactFrame",
+        "Sintezza_Disenchant_MainFrame",
+    }
+    -- Registering a handler directly can taint Forever's protected Escape actions.
+    function ns.UpdateEscapeWindows()
+        if type(UISpecialFrames) ~= "table" then return end
+        for index = #UISpecialFrames, 1, -1 do
+            for _, name in ipairs(names) do
+                if UISpecialFrames[index] == name then
+                    table.remove(UISpecialFrames, index)
+                    break
+                end
+            end
+        end
+        if InCombatLockdown() or ns.ProfessionViews.page then return end
+        for _, name in ipairs(names) do UISpecialFrames[#UISpecialFrames + 1] = name end
+    end
+    ns.UpdateEscapeWindows()
+end
+
 addon:SetScript("OnEvent", function(_, event, ...)
     if event == "ADDON_LOADED" then
         local loadedName = ...
@@ -3804,6 +4011,7 @@ addon:SetScript("OnEvent", function(_, event, ...)
         CreateMinimapButton()
         CreateCompactFrame()
         CreateSettingsFrame()
+        ns.RegisterEscapeHandling()
         windowAppearance:Bind(settingsFrame, {
             resetX = -300,
             active = function()
@@ -3823,6 +4031,7 @@ addon:SetScript("OnEvent", function(_, event, ...)
                 local embedded = page ~= nil
                 if not embedded then ns.ProfessionViews.Restore() end
                 ns.ProfessionViews.page = page
+                if ns.UpdateEscapeWindows then ns.UpdateEscapeWindows() end
                 if not embedded then windowAppearance:ApplyTo(mainFrame) end
                 mainFrame.professionContent = embedded
                 mainContent:LayoutListFooter()
@@ -3831,12 +4040,12 @@ addon:SetScript("OnEvent", function(_, event, ...)
                 mainFrame.TitleBar:SetShown(not embedded)
                 modeTabFrame:ClearAllPoints()
                 modeTabFrame:SetPoint("TOPLEFT", mainContent, "TOPLEFT", 16, embedded and -37 or -53)
-                blacklistOpenButton:ClearAllPoints()
+                mainContent.settingsButton:ClearAllPoints()
                 if embedded then
                     mainFrame.title:SetPoint("RIGHT", mainFrame.CloseButton, "LEFT", -12, 0)
-                    blacklistOpenButton:SetPoint("TOPRIGHT", mainContent, "TOPRIGHT", -30, -7)
+                    mainContent.settingsButton:SetPoint("TOPRIGHT", mainContent, "TOPRIGHT", -30, -7)
                 else
-                    blacklistOpenButton:SetPoint("RIGHT", mainFrame.CloseButton, "LEFT", -8, 0)
+                    mainContent.settingsButton:SetPoint("RIGHT", mainFrame.CloseButton, "LEFT", -8, 0)
                 end
                 mainContent.heading:SetShown(embedded)
                 if embedded then
@@ -3869,7 +4078,7 @@ addon:SetScript("OnEvent", function(_, event, ...)
                     mainContent:SetAllPoints(mainFrame)
                     mainContent:SetFrameStrata(mainFrame:GetFrameStrata())
                     mainContent:SetFrameLevel(mainFrame:GetFrameLevel() + 1)
-                    mainFrame.title:SetPoint("RIGHT", mainContent.statsButton, "LEFT", -12, 0)
+                    mainContent:AnchorMainTitle()
                     DockQueueButtonToPanel()
                     if queueButton.professionPreviousStrata then
                         queueButton:SetFrameStrata(queueButton.professionPreviousStrata)
@@ -3966,7 +4175,10 @@ addon:SetScript("OnEvent", function(_, event, ...)
     elseif event == "UPDATE_BINDINGS" then
         -- The user may (re)bind the key in the client's Key Bindings window.
         RefreshHotkeyDisplay()
+    elseif event == "PLAYER_REGEN_DISABLED" then
+        if ns.UpdateEscapeWindows then ns.UpdateEscapeWindows() end
     elseif event == "PLAYER_REGEN_ENABLED" then
+        if ns.UpdateEscapeWindows then ns.UpdateEscapeWindows() end
         if db and db.compactMode and compactFrame and compactFrame:IsShown() and queueButton and queueButton:GetParent() ~= compactFrame then
             DockQueueButtonToCompact()
         end
@@ -3989,6 +4201,7 @@ addon:RegisterEvent("BAG_UPDATE_DELAYED")
 addon:RegisterEvent("UI_ERROR_MESSAGE")
 addon:RegisterEvent("UI_INFO_MESSAGE")
 addon:RegisterEvent("CHAT_MSG_SYSTEM")
+addon:RegisterEvent("PLAYER_REGEN_DISABLED")
 addon:RegisterEvent("PLAYER_REGEN_ENABLED")
 addon:RegisterEvent("UPDATE_BINDINGS")
 addon:RegisterEvent("CVAR_UPDATE")

@@ -424,6 +424,7 @@ end
 -- Aggregates every group with this quality / armor-or-weapon / ITEM level
 -- (all required levels together). Returns nil when nothing was recorded.
 function Learn.GetObserved(quality, kind, ilvl)
+    if ns.PerfBridge then ns.PerfBridge.Count("observed") end
     if not root then return nil end
     local cacheKey = tostring(quality) .. ":" .. tostring(kind) .. ":" .. tostring(ilvl)
     if observedCache[cacheKey] ~= nil then return observedCache[cacheKey] or nil end

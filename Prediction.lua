@@ -80,7 +80,7 @@ function Pred.MaterialQualityIcon(id, size)
     return "" -- Classic/unranked materials stay exactly as before.
 end
 
-function Pred.MaterialIcon(id, size)
+function Pred.MaterialIcon(id, size, crop)
     local texture
     local getIcon = (C_Item and C_Item.GetItemIconByID) or GetItemIcon
     if getIcon then
@@ -94,7 +94,8 @@ function Pred.MaterialIcon(id, size)
             if ok then texture = icon end
         end
     end
-    return "|T" .. tostring(texture or 134400) .. ":" .. (size or 14) .. ":" .. (size or 14) .. "|t"
+    local coords = crop and ":0:0:64:64:5:59:5:59" or ""
+    return "|T" .. tostring(texture or 134400) .. ":" .. (size or 14) .. ":" .. (size or 14) .. coords .. "|t"
         .. Pred.MaterialQualityIcon(id,size)
 end
 
@@ -253,7 +254,7 @@ function Pred.BuildPreview(est)
     local parts = {}
     for i=1,math.min(MAX_PREVIEW_MATERIALS,#est.mats) do
         local m=est.mats[i]
-        parts[#parts+1] = Pred.MaterialIcon(m.id) .. " " .. Pred.Percent(m.chance) .. " x" .. QtyText(m)
+        parts[#parts+1] = Pred.MaterialIcon(m.id, 18, true) .. " " .. Pred.Percent(m.chance) .. " x" .. QtyText(m)
     end
     if #est.mats>MAX_PREVIEW_MATERIALS then parts[#parts+1]="+"..(#est.mats-MAX_PREVIEW_MATERIALS) end
     return "~ " .. table.concat(parts, "   ")
