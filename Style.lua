@@ -71,7 +71,7 @@ function Style.RegisterBagButton(open)
     local api = Baganator and Baganator.API
     if bagButton or not api or type(api.RegisterRegion) ~= "function" then return end
     local button = Style.ProfessionLauncher(UIParent, nil, ns.L.BAG_BUTTON, open, "BaganatorTooltipIconButtonTemplate")
-    api.RegisterRegion("Sintezza Disenchant", addonName, "backpack", "top_left", button)
+    api.RegisterRegion("Sintezza Disenchant", addonName, "backpack", "bottom_left", button)
     bagButton = button
     -- Baganator installs its active skinner during PLAYER_LOGIN.
     C_Timer.After(0, function()
@@ -79,4 +79,77 @@ function Style.RegisterBagButton(open)
         if skins and skins.AddFrame then skins.AddFrame("IconButton", button, {}) end
         if api.RequestLayoutUpdate then api.RequestLayoutUpdate() end
     end)
+end
+
+local blizzardBagButtons = {}
+local function AttachBlizzardBagButton(bag, open)
+    local money = bag and bag.MoneyFrame
+    if not money or blizzardBagButtons[bag] then return end
+    local button = Style.ProfessionLauncher(money, nil, ns.L.BAG_BUTTON, open)
+    button:SetSize(18, 16)
+    button.Icon:SetSize(14, 14)
+    button:SetPoint("LEFT", money, "LEFT", 2, 0)
+    blizzardBagButtons[bag] = button
+end
+
+local ellesmereHooked, ellesmereBagButton
+local function AttachEllesmereBagButton(bags, open)
+    local header, search = bags.Header, bags._searchBox
+    if not header or not search then return end
+    local points = search:GetNumPoints()
+    if points ~= 1 and points ~= 2 then return end
+    local point, relative, anchor, x, y = search:GetPointByName("RIGHT")
+    if canaccessallvalues and not canaccessallvalues(point, relative, anchor, x, y) then return end
+    if point ~= "RIGHT" then return end
+
+    local button = ellesmereBagButton
+    if InCombatLockdown() then
+        if button and relative ~= button then button:Hide() end
+        return
+    end
+    if button and relative == button then
+        button:Show()
+        return
+    end
+
+    local width, gap = 20, 4
+    if points == 1 then
+        if relative and relative ~= header then return end
+        relative, anchor = header, anchor or "RIGHT"
+        -- Retain the original left edge so the title and the other tools keep their space.
+        local oldWidth = search:GetWidth()
+        if issecretvalue and issecretvalue(oldWidth) then return end
+        if oldWidth <= width + gap then return end
+        search:SetWidth(oldWidth - width - gap)
+    elseif anchor ~= "LEFT" or not (relative and relative:GetParent() == header) then
+        return
+    end
+
+    if not button then
+        button = Style.ProfessionLauncher(header, nil, ns.L.BAG_BUTTON, open)
+        button:SetSize(width, 20)
+        ellesmereBagButton = button
+    end
+    button:ClearAllPoints()
+    button:SetPoint("RIGHT", relative, anchor, x, y)
+    search:SetPoint("RIGHT", button, "LEFT", -gap, 0)
+    button:Show()
+end
+
+function Style.RegisterBagLaunchers(open)
+    Style.RegisterBagButton(open)
+    if InCombatLockdown() then return end
+    AttachBlizzardBagButton(ContainerFrame1, open)
+    AttachBlizzardBagButton(ContainerFrameCombinedBags, open)
+
+    local bags = EUI_MainBagFrame
+    if not bags or type(bags.SyncHeaderIcons) ~= "function" then return end
+    if not ellesmereHooked then
+        local function Attach() AttachEllesmereBagButton(bags, open) end
+        -- EllesmereUI builds the header after login and can rebuild its search anchors.
+        hooksecurefunc(bags, "SyncHeaderIcons", Attach)
+        bags:HookScript("OnShow", Attach)
+        ellesmereHooked = true
+    end
+    AttachEllesmereBagButton(bags, open)
 end

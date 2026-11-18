@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.0
+
+- Add a disenchant queue shortcut to the Blizzard backpack, combined bags, and EllesmereUI Bags.
+- Restore the disenchant queue shortcut at the bottom left of Baganator's backpack.
+
 ## 1.2.0
 
 - Add optional Sintezza Perf developer measurements for disenchant estimates.

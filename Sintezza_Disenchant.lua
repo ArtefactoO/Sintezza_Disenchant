@@ -3702,7 +3702,7 @@ local function RunSelfCheck(forceWindow)
     elseif GetAddOnMetadata then
         meta = GetAddOnMetadata(ADDON_NAME, "Version")
     end
-    local header = L["CHECK_HEADER"]:format(meta or "1.2.0")
+    local header = L["CHECK_HEADER"]:format(meta or "1.3.0")
     lines[#lines + 1] = header
     Print(header)
 
@@ -3983,8 +3983,9 @@ end
 addon:SetScript("OnEvent", function(_, event, ...)
     if event == "ADDON_LOADED" then
         local loadedName = ...
-        if loadedName == "Baganator" and mainFrame and IsLoggedIn() then
-            ns.Style.RegisterBagButton(ToggleMainFrame)
+        if mainFrame and IsLoggedIn() and (loadedName == "Baganator" or loadedName == "Blizzard_UIPanels_Game"
+            or loadedName == "EllesmereUIBags") then
+            ns.Style.RegisterBagLaunchers(ToggleMainFrame)
         end
         if loadedName ~= ADDON_NAME then
             return
@@ -4090,8 +4091,9 @@ addon:SetScript("OnEvent", function(_, event, ...)
                 end
             end, ns.ProfessionViews.SyncAction)
         end
+        if IsLoggedIn() then ns.Style.RegisterBagLaunchers(ToggleMainFrame) end
     elseif event == "PLAYER_LOGIN" then
-        ns.Style.RegisterBagButton(ToggleMainFrame)
+        ns.Style.RegisterBagLaunchers(ToggleMainFrame)
         RefreshList()
     elseif event == "BAG_UPDATE_DELAYED" then
         local anyShown = (mainFrame and mainFrame:IsShown()) or (compactFrame and compactFrame:IsShown())
@@ -4178,6 +4180,7 @@ addon:SetScript("OnEvent", function(_, event, ...)
     elseif event == "PLAYER_REGEN_DISABLED" then
         if ns.UpdateEscapeWindows then ns.UpdateEscapeWindows() end
     elseif event == "PLAYER_REGEN_ENABLED" then
+        ns.Style.RegisterBagLaunchers(ToggleMainFrame)
         if ns.UpdateEscapeWindows then ns.UpdateEscapeWindows() end
         if db and db.compactMode and compactFrame and compactFrame:IsShown() and queueButton and queueButton:GetParent() ~= compactFrame then
             DockQueueButtonToCompact()

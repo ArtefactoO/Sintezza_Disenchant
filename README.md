@@ -8,7 +8,7 @@ Queue gear for disenchanting, inspect possible materials and their value, and tr
 
 ## Queue and mailing
 
-- Open the queue from the Enchanting profession window, the minimap, Baganator, or `/sde`. Select gear and process the queue one item at a time.
+- Open the queue from the Enchanting profession window, the minimap, or `/sde`. In bags, use the shard icon at the bottom left in the Blizzard backpack, combined bags, and Baganator, or beside search in EllesmereUI Bags. Select gear and process the queue one item at a time.
 - Switch to **Compact** for a small bar showing the current item, its material preview, and the next item. Use **Full** to return to the complete list.
 - The item list and queue fit their visible rows to the window size. Use the mouse wheel or scrollbar to reach the remaining items; selections stay active when their rows are offscreen.
 - Protect gear sets, set item-level and price cutoffs, or skip items without a price when adding gear in bulk. You can still select protected gear manually. Use the button beside an item to exclude or restore all copies; excluded items remain visible but cannot enter the queue until restored.
