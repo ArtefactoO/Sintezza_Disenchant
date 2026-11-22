@@ -2348,7 +2348,7 @@ local function CreateStyledWindow(globalName, width, height, extraTemplate, addo
 
     local titleBar = Sintezza_Theme:CreateWidgets(ns.SettingsTheme):WindowHeader(f, {
         addonName = addonName,
-        icon = Sintezza_Theme.icons.Sintezza_Disenchant,
+        icon = ns.Icon,
         onClose = function()
             if InCombatLockdown() and f:IsProtected() then
                 Print(L["NOT_IN_COMBAT"])
@@ -2979,7 +2979,7 @@ local function CreateMainFrame()
 end
 
 local function CreateMinimapButton()
-    minimapButton = Sintezza_Theme:CreateMinimapButton(ADDON_NAME, Sintezza_Theme.icons.Sintezza_Disenchant, db.minimap,
+    minimapButton = Sintezza_Theme:CreateMinimapButton(ADDON_NAME, ns.Icon, db.minimap,
         function()
             local tab = db.minimapDestination == "profession" and ns.ProfessionTab
             if tab and tab.Toggle and tab.Toggle() then return end
@@ -3702,7 +3702,7 @@ local function RunSelfCheck(forceWindow)
     elseif GetAddOnMetadata then
         meta = GetAddOnMetadata(ADDON_NAME, "Version")
     end
-    local header = L["CHECK_HEADER"]:format(meta or "1.3.0")
+    local header = L["CHECK_HEADER"]:format(meta or "1.3.1")
     lines[#lines + 1] = header
     Print(header)
 

@@ -290,7 +290,7 @@ function tabUI.Init(helper, refresh, prepare, styleContent, syncAction)
         if portraitContainer and portraitContainer.portrait and portraitContainer.CircleMask then
             portrait = portraitContainer:CreateTexture(nil, "OVERLAY", nil, 7)
             portrait:SetAllPoints(portraitContainer.portrait)
-            portrait:SetTexture(Sintezza_Theme.icons.Sintezza_Disenchant)
+            portrait:SetTexture(ns.Icon)
             portrait:AddMaskTexture(portraitContainer.CircleMask)
             portrait:Hide()
         end

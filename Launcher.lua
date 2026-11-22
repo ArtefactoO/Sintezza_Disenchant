@@ -1,4 +1,4 @@
-local addonName, ns = ...
+local _, ns = ...
 local Launcher = {}
 ns.Launcher = Launcher
 
@@ -7,7 +7,7 @@ function Launcher:RegisterSettings(title, open)
     if self.category or not shared.RegisterLauncherPage then return end
     self.category = shared:RegisterLauncherPage({
         title = title,
-        icon = shared.icons[addonName],
+        icon = ns.Icon,
         buttonLabel = ns.L.LAUNCHER_OPEN,
         open = open,
         appearance = ns.SettingsTheme or ns.Theme,

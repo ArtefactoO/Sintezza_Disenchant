@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.3.1
+
+- Ship the Disenchant logo with Disenchant and use it in the addon list, settings, minimap button, and profession header.
+
 ## 1.3.0
 
 - Add a disenchant queue shortcut to the Blizzard backpack, combined bags, and EllesmereUI Bags.
