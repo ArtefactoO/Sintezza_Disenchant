@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.3.2
+
+- Skip items from saved equipment sets when marking best picks or filling the compact disenchant queue.
+
 ## 1.3.1
 
 - Ship the Disenchant logo with Disenchant and use it in the addon list, settings, minimap button, and profession header.

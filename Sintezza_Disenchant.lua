@@ -671,7 +671,7 @@ end
 -- queue. Split into predicates (was one inline chain) so the "skipped solely
 -- because of price" counter can ask each reason separately.
 local function IsSetProtected(item)
-    return db.protectSets and item.isSet == true
+    return db.protectSets and (item.isSet == true or item.setDataUnavailable == true)
 end
 
 local function IsIlvlProtected(item)
@@ -720,6 +720,9 @@ local function BuildQueue()
     wipe(queue)
     valuableSkippedCount = 0
     for _, item in ipairs(items) do
+        if selected[item.key] == "auto" and IsSetProtected(item) then
+            selected[item.key] = nil
+        end
         if selected[item.key] and not item.disenchantBlocked and not item.excluded then
             queue[#queue + 1] = item
         end
@@ -806,10 +809,36 @@ local function LookupItemValue(itemLink)
     return copper, sourceLabel
 end
 
+local function ReadEquipmentSetItems()
+    -- GetItemLocations can crash on Forever. Match saved equipment by item ID.
+    local itemsByID = { complete = false }
+    local api = C_EquipmentSet
+    if not (api and api.GetEquipmentSetIDs and api.GetItemIDs) then return itemsByID end
+    local setIDs = api.GetEquipmentSetIDs()
+    if IsSecretValue(setIDs) or type(setIDs) ~= "table" then return itemsByID end
+    itemsByID.complete = true
+    for _, setID in pairs(setIDs) do
+        local itemIDs = not IsSecretValue(setID) and type(setID) == "number" and api.GetItemIDs(setID)
+        if IsSecretValue(itemIDs) or type(itemIDs) ~= "table" then
+            itemsByID.complete = false
+        else
+            for _, itemID in pairs(itemIDs) do
+                if IsSecretValue(itemID) then
+                    itemsByID.complete = false
+                elseif type(itemID) == "number" and itemID > 0 then
+                    itemsByID[itemID] = true
+                end
+            end
+        end
+    end
+    return itemsByID
+end
+
 local function ScanBags()
     wipe(items)
     local validKeys = {}
     local waiting = 0
+    local setItems = activeMode.usesItemProtection and ReadEquipmentSetItems()
 
     for _, bag in ipairs(BAGS_TO_SCAN) do
         local numSlots = (C_Container and C_Container.GetContainerNumSlots and C_Container.GetContainerNumSlots(bag)) or 0
@@ -861,6 +890,8 @@ local function ScanBags()
                     end
 
                     local key = ComputeItemKey(bag, slot, link)
+                    local itemID = GetItemIDFromLink(link)
+                    local hasSetBonus = not IsSecretValue(setID) and type(setID) == "number" and setID > 0
                     local bound = info.isBound
                     if IsSecretValue(bound) then bound = nil end
                     if IsSecretValue(bindType) then bindType = nil end
@@ -875,6 +906,7 @@ local function ScanBags()
                         bag = bag,
                         slot = slot,
                         key = key,
+                        itemID = itemID,
                         link = link,
                         texture = info.iconFileID or itemTexture or 134400,
                         quality = itemQuality,
@@ -883,7 +915,8 @@ local function ScanBags()
                         itemLevel = itemLevel,
                         vendorPrice = vendorPrice,
                         auctionable = auctionable,
-                        isSet = (setID ~= nil and setID ~= 0) or nil,
+                        isSet = hasSetBonus or (setItems and setItems[itemID]) or nil,
+                        setDataUnavailable = setItems and (not setItems.complete or not itemID),
                         -- These materials may be needed for quests; require explicit selection.
                         manualOnly = activeMode.key == "disenchant" and IsForeverDisenchantMaterial(link),
                     }
@@ -980,7 +1013,7 @@ local function SetListRowItem(row, item)
     row.item = item
     if row.preview then row.preview:SetText(PreviewForItem(item)) end
     local blocked = item.disenchantBlocked == true or item.excluded == true
-    local isSelected = not blocked and selected[item.key] == true
+    local isSelected = not blocked and selected[item.key] ~= nil
     if blocked then
         row:RegisterForClicks()
         row.highlight:Hide()
@@ -1160,7 +1193,7 @@ local function CreateListRow(parent)
         -- Undo the checkbox's own visual toggle if the selection was refused
         -- (in combat) - the refresh below re-syncs it either way.
         if parentRow and parentRow.item then
-            self:SetChecked(selected[parentRow.item.key] == true)
+            self:SetChecked(selected[parentRow.item.key] ~= nil)
         end
     end)
 
@@ -2707,7 +2740,7 @@ local function CreateMainFrame()
                 local pick, usedFallback = ns.Prediction.IsDisenchantPick(item, advice and advice[item.key])
                 fallback = fallback or usedFallback
                 if pick then
-                    selected[item.key] = true
+                    selected[item.key] = "auto"
                     count = count + 1
                 end
             end
@@ -2910,9 +2943,14 @@ local function CreateMainFrame()
         local item = queue[1]
         local armedBag = self:GetAttribute("target-bag")
         local armedSlot = self:GetAttribute("target-slot")
+        local setProtected
+        if item and db.protectSets and activeMode.usesItemProtection and selected[item.key] ~= true then
+            local setItems = ReadEquipmentSetItems()
+            setProtected = not setItems.complete or not item.itemID or setItems[item.itemID]
+        end
         if not item or IsBlacklistedItem(item.link) or item.bag ~= armedBag or item.slot ~= armedSlot
             or GetBagItemLinkSafe(item.bag, item.slot) ~= item.link
-            or ComputeItemKey(item.bag, item.slot, item.link) ~= item.key then
+            or ComputeItemKey(item.bag, item.slot, item.link) ~= item.key or setProtected then
             ClearQueueButtonAttributes()
             self:Disable()
             UpdateQueueButtonVisual(L[activeMode.buttonTextKey] or L["DISENCHANT"])
@@ -3702,7 +3740,7 @@ local function RunSelfCheck(forceWindow)
     elseif GetAddOnMetadata then
         meta = GetAddOnMetadata(ADDON_NAME, "Version")
     end
-    local header = L["CHECK_HEADER"]:format(meta or "1.3.1")
+    local header = L["CHECK_HEADER"]:format(meta or "1.3.2")
     lines[#lines + 1] = header
     Print(header)
 
@@ -4095,7 +4133,7 @@ addon:SetScript("OnEvent", function(_, event, ...)
     elseif event == "PLAYER_LOGIN" then
         ns.Style.RegisterBagLaunchers(ToggleMainFrame)
         RefreshList()
-    elseif event == "BAG_UPDATE_DELAYED" then
+    elseif event == "BAG_UPDATE_DELAYED" or event == "EQUIPMENT_SETS_CHANGED" then
         local anyShown = (mainFrame and mainFrame:IsShown()) or (compactFrame and compactFrame:IsShown())
         if anyShown then
             if InCombatLockdown() then
@@ -4201,6 +4239,7 @@ end)
 addon:RegisterEvent("ADDON_LOADED")
 addon:RegisterEvent("PLAYER_LOGIN")
 addon:RegisterEvent("BAG_UPDATE_DELAYED")
+addon:RegisterEvent("EQUIPMENT_SETS_CHANGED")
 addon:RegisterEvent("UI_ERROR_MESSAGE")
 addon:RegisterEvent("UI_INFO_MESSAGE")
 addon:RegisterEvent("CHAT_MSG_SYSTEM")
