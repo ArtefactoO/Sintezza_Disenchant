@@ -99,6 +99,7 @@ local function environment()
         function frame:SetChecked(value) self.checked = value end
         function frame:SetEnabled(value) self.enabled = value end
         function frame:EnableMouse(value) self.mouse = value end
+        function frame:EnableMouseMotion(value) self.mouseMotion = value end
         function frame:SetTexture(value) self.texture = value end
         function frame:SetTextColor(...) self.color = {...} end
         function frame:SetClipsChildren(value) self.clips = value end
@@ -122,8 +123,13 @@ local function environment()
         return frame
     end
     env.CreateFrame = function(kind, _, parent) return widget(parent, kind) end
-    env.GameTooltip = {IsOwned = function(self, frame) return self.owner ~= nil and self.owner == frame end,
-        Hide = function(self) self.owner = nil end}
+    env.GameTooltip = {
+        IsOwned = function(self, frame) return self.owner ~= nil and self.owner == frame end,
+        SetOwner = function(self, frame) self.owner, self.previewItem = frame, nil end,
+        SetBagItem = function(self, bag, slot) self.bag, self.slot = bag, slot end,
+        Show = function(self) self.shown = true end,
+        Hide = function(self) self.owner, self.shown = nil, false end,
+    }
     env.mainContent = widget()
     env.mainContent:SetSize(860, 580)
     env.mainFrame = env.mainContent
@@ -382,5 +388,47 @@ check(clicks.scans == beforeScans and clicks.estimates == beforeEstimates and #c
 for _, row in ipairs(clicks.listRows) do row:Hide() end
 ok, detail = clicks.DescribeTestViewport(clicks.listScrollFrame, clicks.listRows, #clicks.items)
 check(not ok and detail:find("items 2, rows 0/0", 1, true), "viewport diagnostics distinguish populated data from hidden rows")
+
+local hover = environment()
+hover.ITEM_QUALITY_COLORS = {
+    [2] = {r = 0.12, g = 1, b = 0, hex = "|cff1eff00"},
+    [3] = {r = 0, g = 0.44, b = 0.87, hex = "|cff0070dd"},
+}
+hover.ns.Prediction.AppendToTooltip = function(tooltip, item) tooltip.previewItem = item end
+hover:Fill(100)
+for slot, item in ipairs(hover.items) do
+    item.bag, item.slot = 0, slot
+    hover.selected[item.key] = true
+end
+hover.items[2].quality = 3
+hover.items[3].quality = nil
+hover.BuildQueue()
+hover.RefreshUI()
+hover:Flush()
+local queueRow = hover.queueRows[1]
+local tooltip = hover.GameTooltip
+check(queueRow.mouseMotion and not queueRow.mouse, "queue rows receive hover without enabling mouse clicks")
+check(queueRow.label.text == "1. |cff1eff00Item 1|r", "the first queued item uses its quality color")
+check(hover.queueRows[2].label.text == "2. |cff0070ddItem 2|r", "subsequent names use their own quality colors")
+check(hover.queueRows[3].label.text == "3. Item 3", "an item without known quality keeps its readable name")
+queueRow:Run("OnEnter")
+check(tooltip:IsOwned(queueRow) and tooltip.shown and tooltip.bag == 0 and tooltip.slot == 1 and tooltip.previewItem == queueRow.item,
+    "hover opens the current bag item and its material preview")
+hover.queueScrollFrame.bar:Run("OnValueChanged", 1)
+hover:Flush()
+check(tooltip:IsOwned(queueRow) and tooltip.slot == 2 and tooltip.previewItem == queueRow.item,
+    "scrolling a hovered queue row replaces the tooltip with the new item")
+queueRow:Run("OnLeave")
+check(not tooltip.shown, "leaving a queue row closes its tooltip")
+hover.db.showExpected = false
+hover.combat = true
+queueRow:Run("OnEnter")
+check(tooltip.shown and tooltip.slot == 2 and not tooltip.previewItem, "the standard item tooltip works in combat with previews disabled")
+queueRow:Hide()
+check(not tooltip.shown, "hiding the hovered row closes its tooltip")
+tooltip:SetOwner(hover.listRows[1])
+tooltip:Show()
+queueRow:Run("OnLeave")
+check(tooltip:IsOwned(hover.listRows[1]) and tooltip.shown, "leaving a queue row preserves another frame's tooltip")
 
 return assertions

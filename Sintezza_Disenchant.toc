@@ -4,7 +4,7 @@
 ## Notes-ruRU: Очередь распыления, оценка материалов и отправка вещей.
 ## Author: Sintezza
 ## X-License: MIT
-## Version: 1.3.2
+## Version: 1.4.0
 ## IconTexture: Interface\AddOns\Sintezza_Disenchant\Media\Icon
 ## Category: Professions
 ## Category-ruRU: Профессии

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.0
+
+- Show item tooltips on queue rows and color queued item names by quality.
+
 ## 1.3.2
 
 - Skip items from saved equipment sets when marking best picks or filling the compact disenchant queue.

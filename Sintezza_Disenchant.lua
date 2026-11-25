@@ -1237,9 +1237,34 @@ local function CreateListRow(parent)
     return row
 end
 
+function ns.ItemNameWithQuality(item)
+    local name = item.name or L["UNKNOWN"]
+    local color = ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[item.quality]
+    return color and color.hex and (color.hex .. name .. "|r") or name
+end
+
 local function CreateQueueRow(parent)
     local row = CreateFrame("Frame", nil, parent)
     row:SetHeight(24)
+    row:EnableMouseMotion(true)
+
+    function row:ShowItemTooltip()
+        local item = self.item
+        if not item then return end
+
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetBagItem(item.bag, item.slot)
+        if ns.Prediction and activeMode.key == "disenchant" and db.showExpected ~= false then
+            ns.Prediction.AppendToTooltip(GameTooltip, item)
+        end
+        GameTooltip:Show()
+    end
+    row:SetScript("OnEnter", row.ShowItemTooltip)
+    local function HideItemTooltip(self)
+        if GameTooltip:IsOwned(self) then GameTooltip:Hide() end
+    end
+    row:SetScript("OnLeave", HideItemTooltip)
+    row:SetScript("OnHide", HideItemTooltip)
 
     local iconBorder = CreateIconBorder(row, 20)
     iconBorder:SetPoint("LEFT", 0, 0)
@@ -1406,10 +1431,11 @@ local function UpdateQueueRows()
             row.icon:SetTexture(item.texture or 134400)
             ns.SettingsTheme:PaintItemBorder(row.iconBorder.edge, item.quality)
             row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-            row.label:SetText(index .. ". " .. (item.name or L["UNKNOWN"]))
+            row.label:SetText(index .. ". " .. ns.ItemNameWithQuality(item))
             if index == 1 then row.label:SetTextColor(1, 0.82, 0)
             else row.label:SetTextColor(0.9, 0.9, 0.9) end
             row:Show()
+            if GameTooltip:IsOwned(row) then row:ShowItemTooltip() end
         end
     end
     for slot = visible + 1, #queueRows do
@@ -1850,7 +1876,7 @@ local function UpdateQueueButton()
     UpdateQueueButtonVisual(label)
 
     if queueInfoText then
-        queueInfoText:SetText(string.format(L["QUEUE_NEXT"], item.name or L["UNKNOWN"]))
+        queueInfoText:SetText(string.format(L["QUEUE_NEXT"], ns.ItemNameWithQuality(item)))
     end
 end
 
@@ -2013,11 +2039,8 @@ UpdateCompactFrame = function()
         local nextItem = (item.count or 1) >= (activeMode.minStack or 1) * 2 and item or queue[2]
         local nextLabel = ""
         if nextItem then
-            local name = nextItem.name or L["UNKNOWN"]
-            local nextColor = ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[nextItem.quality]
-            if nextColor and nextColor.hex then name = nextColor.hex .. name .. "|r" end
             nextLabel = string.format(L["COMPACT_NEXT"],
-                "|T" .. (nextItem.texture or 134400) .. ":16:16:0:0|t " .. name)
+                "|T" .. (nextItem.texture or 134400) .. ":16:16:0:0|t " .. ns.ItemNameWithQuality(nextItem))
         end
         if skippedText then nextLabel = nextLabel ~= "" and (nextLabel .. "  |  " .. skippedText) or skippedText end
         compactQueueText:SetText(nextLabel)
@@ -3740,7 +3763,7 @@ local function RunSelfCheck(forceWindow)
     elseif GetAddOnMetadata then
         meta = GetAddOnMetadata(ADDON_NAME, "Version")
     end
-    local header = L["CHECK_HEADER"]:format(meta or "1.3.2")
+    local header = L["CHECK_HEADER"]:format(meta or "1.4.0")
     lines[#lines + 1] = header
     Print(header)
 
